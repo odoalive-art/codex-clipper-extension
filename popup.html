@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      --ios-bg: #f2f2f7;
+      --card-bg: #ffffff;
+      --primary: #000000;
+      --accent: #007aff;
+      --border: rgba(0, 0, 0, 0.08);
+      --text-main: #1c1c1e;
+      --text-sub: #8e8e93;
+    }
+
+    body {
+      width: 360px;
+      height: 620px;
+      margin: 0;
+      padding: 12px;
+      background: var(--ios-bg);
+      font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .container {
+      flex: 1;
+      background: var(--card-bg);
+      border-radius: 24px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+      border: 1px solid var(--border);
+    }
+
+    .header {
+      padding: 14px 20px 0;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(10px);
+      z-index: 10;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 10px;
+    }
+    .brand {
+      color: var(--accent);
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .site-badges {
+      display: flex;
+      gap: 6px;
+      padding-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .site-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 3px 8px;
+      border-radius: 100px;
+      background: #f2f2f7;
+      color: var(--text-sub);
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+    }
+    .site-badge::before {
+      content: '';
+      display: block;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #c7c7cc;
+    }
+    .site-badge.active {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-color: rgba(46, 125, 50, 0.2);
+    }
+    .site-badge.active::before { background: #34c759; }
+
+    #preview {
+      flex: 1;
+      padding: 18px 20px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      outline: none;
+      font-size: 14px;
+      line-height: 1.65;
+      color: #3a3a3c;
+    }
+    #preview:empty::before {
+      content: "点击下方按钮净化内容...";
+      color: #c7c7cc;
+      text-align: left;
+      display: block;
+    }
+    #preview h1 { font-size: 19px; font-weight: 700; margin: 0 0 12px; color: #000; }
+    #preview h2 { font-size: 16px; font-weight: 700; margin: 0 0 10px; color: #000; }
+    #preview h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; color: #1c1c1e; }
+    #preview p { margin: 0 0 12px; }
+    #preview img {
+      max-width: 100%;
+      border-radius: 10px;
+      margin: 6px 0;
+      display: block;
+      border: 0.5px solid var(--border);
+    }
+    .msg { text-align: center; margin-top: 80px; font-size: 13px; color: #8e8e93; }
+    .msg.warn { color: #ff9500; }
+    .msg.error { color: #ff3b30; }
+
+    .tools {
+      border-top: 0.5px solid var(--border);
+      background: rgba(255, 255, 255, 0.95);
+      padding: 8px 14px;
+      display: grid;
+      gap: 8px;
+    }
+    details {
+      border: 1px solid #ececf2;
+      border-radius: 12px;
+      background: #fafafd;
+      padding: 8px 10px;
+    }
+    summary {
+      cursor: pointer;
+      font-size: 12px;
+      color: #3a3a3c;
+      font-weight: 600;
+    }
+    .tool-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+      font-size: 12px;
+      color: #3a3a3c;
+    }
+    .mini-btn {
+      border: 1px solid #d8d8de;
+      background: #fff;
+      color: #3a3a3c;
+      border-radius: 8px;
+      font-size: 11px;
+      padding: 5px 8px;
+      cursor: pointer;
+    }
+    #rulesInput {
+      width: 100%;
+      min-height: 120px;
+      border: 1px solid #e5e5ec;
+      border-radius: 8px;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 11px;
+      padding: 8px;
+      box-sizing: border-box;
+      resize: vertical;
+      margin-top: 8px;
+    }
+    #debugOutput {
+      margin-top: 8px;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 11px;
+      max-height: 120px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #3a3a3c;
+    }
+
+    .footer {
+      padding: 14px 20px;
+      background: rgba(255, 255, 255, 0.95);
+      border-top: 0.5px solid var(--border);
+      display: flex;
+      gap: 10px;
+    }
+    .btn {
+      flex: 1;
+      padding: 12px 14px;
+      min-height: 40px;
+      border-radius: 100px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      line-height: 1;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-text { line-height: 1; }
+    .icon {
+      width: 17px;
+      height: 17px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      display: block;
+      flex-shrink: 0;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-secondary { background: var(--accent); color: #fff; display: none; }
+    .btn:active { transform: scale(0.96); opacity: 0.8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-top">
+        <span class="brand">Clipper Studio Codex</span>
+        <span style="width:80px"></span>
+      </div>
+      <div id="siteBadges" class="site-badges"></div>
+    </div>
+
+    <div id="preview" spellcheck="false"></div>
+
+    <div class="tools">
+      <details>
+        <summary>规则配置（JSON）</summary>
+        <textarea id="rulesInput"></textarea>
+        <div class="tool-row">
+          <button id="saveRulesBtn" class="mini-btn">保存规则</button>
+          <button id="resetRulesBtn" class="mini-btn">恢复默认</button>
+          <button id="copyRulesBtn" class="mini-btn">复制JSON</button>
+        </div>
+      </details>
+      <details>
+        <summary>调试信息</summary>
+        <div class="tool-row">
+          <label><input id="debugModeCheckbox" type="checkbox" checked> 启用调试</label>
+        </div>
+        <pre id="debugOutput"></pre>
+      </details>
+    </div>
+
+    <div class="footer">
+      <button id="grabBtn" class="btn btn-primary">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+        <span class="btn-text">开始净化</span>
+      </button>
+      <button id="copyBtn" class="btn btn-secondary">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span class="btn-text">完成并复制</span>
+      </button>
+    </div>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
