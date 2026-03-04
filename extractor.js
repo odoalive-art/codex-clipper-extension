@@ -1,6 +1,9 @@
-export const SUPPORTED_SITES = [{ host: 'xiaobot.net', label: '小报童' }];
+export const SUPPORTED_SITES = [
+  { host: 'xiaobot.net', label: '小报童' },
+  { host: 'mp.weixin.qq.com', label: '公众号' },
+];
 
-export function extractPageContent(options = {}) {
+export async function extractPageContent(options = {}) {
   const SAFE_PROTOCOLS = new Set(['http:', 'https:']);
 
   const DEFAULT_RULES = [
@@ -28,6 +31,34 @@ export function extractPageContent(options = {}) {
       text: { minLength: 1, dedupe: true },
       limits: { maxBlocks: 400, maxChars: 50000 },
     },
+    {
+      id: 'wechat-mp',
+      label: '公众号',
+      enabled: true,
+      match: { hostEquals: 'mp.weixin.qq.com' },
+      rootSelectors: ['#js_content', '.rich_media_content', 'article', 'main'],
+      titleSelectors: ['#activity-name .js_title_inner', '#activity-name', '.rich_media_title'],
+      contentSelectors: ['h1', 'h2', 'h3', 'p', 'section', 'li', 'blockquote', 'pre', 'div', 'img'],
+      exclude: {
+        ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
+        ancestorClassRegex:
+          '\\b(nav|header|footer|sidebar|menu|ad|advertisement|recommend|related|comment|copyright|share|toolbar|breadcrumb|qr_code|js_profile_qrcode|reward|wx_follow_card)\\b',
+        textRegex:
+          '^(收藏|关注|私信|点赞|评论|分享|举报|更多|展开|收起|查看|复制|下载|购买|加购|立即|确认|取消|返回|登录|注册|微信扫一扫关注该公众号)$',
+      },
+      image: {
+        srcAttrs: ['data-src', 'data-original', 'data-origin', 'src'],
+        minWidth: 0,
+        minHeight: 0,
+        rejectSrcRegex: '(avatar|icon|logo|emoji|badge|sprite|btn|button|arrow|loading|placeholder|qrcode)',
+      },
+      text: {
+        minLength: 1,
+        dedupe: true,
+        skipIfHasDescendantSelector: 'p, h1, h2, h3, li, blockquote, pre, section, div',
+      },
+      limits: { maxBlocks: 500, maxChars: 80000 },
+    },
   ];
 
   function toRegExp(value) {
@@ -37,6 +68,10 @@ export function extractPageContent(options = {}) {
     } catch {
       return null;
     }
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   function clone(value) {
@@ -94,6 +129,8 @@ export function extractPageContent(options = {}) {
       text: {
         minLength: Number.isFinite(rule.text?.minLength) ? Math.max(0, Number(rule.text.minLength)) : 1,
         dedupe: rule.text?.dedupe !== false,
+        skipIfHasDescendantSelector:
+          typeof rule.text?.skipIfHasDescendantSelector === 'string' ? rule.text.skipIfHasDescendantSelector : '',
       },
       limits: {
         maxBlocks: Number.isFinite(rule.limits?.maxBlocks) ? Math.max(1, Number(rule.limits.maxBlocks)) : 400,
@@ -168,6 +205,64 @@ export function extractPageContent(options = {}) {
     return 'p';
   }
 
+  async function preloadLazyContentIfNeeded(rule, debug) {
+    const preloadEnabled = options?.preloadLazy !== false;
+    if (!preloadEnabled) return;
+    if (!rule || rule.id !== 'wechat-mp') return;
+
+    const startY = window.scrollY || 0;
+    const scroller = document.scrollingElement || document.documentElement;
+    const maxSteps = Number.isFinite(options?.preloadMaxSteps) ? Math.max(3, Number(options.preloadMaxSteps)) : 24;
+    const stepPx = Number.isFinite(options?.preloadStepPx) ? Math.max(200, Number(options.preloadStepPx)) : 900;
+    const settleMs = Number.isFinite(options?.preloadSettleMs) ? Math.max(50, Number(options.preloadSettleMs)) : 120;
+
+    let steps = 0;
+    let lastHeight = 0;
+    for (let i = 0; i < maxSteps; i += 1) {
+      const targetY = Math.min(scroller.scrollHeight, i * stepPx);
+      window.scrollTo(0, targetY);
+      window.dispatchEvent(new Event('scroll'));
+      window.dispatchEvent(new Event('resize'));
+      await sleep(settleMs);
+      steps += 1;
+
+      const curHeight = scroller.scrollHeight;
+      const nearBottom = window.innerHeight + window.scrollY >= curHeight - 4;
+      const stable = curHeight === lastHeight;
+      if (nearBottom && stable) break;
+      lastHeight = curHeight;
+    }
+
+    // Let lazy-loaded images resolve after scroll stimulation.
+    const images = Array.from(document.images || []);
+    const imageWaiters = images.map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise(resolve => {
+        const done = () => {
+          img.removeEventListener('load', done);
+          img.removeEventListener('error', done);
+          resolve();
+        };
+        img.addEventListener('load', done, { once: true });
+        img.addEventListener('error', done, { once: true });
+      });
+    });
+    if (imageWaiters.length) {
+      await Promise.race([Promise.allSettled(imageWaiters), sleep(1200)]);
+    }
+
+    window.scrollTo(0, startY);
+    window.dispatchEvent(new Event('scroll'));
+
+    if (debug) {
+      debug.preload = {
+        enabled: true,
+        steps,
+        imageCandidates: images.length,
+      };
+    }
+  }
+
   function extractWithRule(rule) {
     const debug = {
       ruleId: rule.id,
@@ -180,6 +275,7 @@ export function extractPageContent(options = {}) {
         skipNoiseText: 0,
         skipEmpty: 0,
         skipDuplicateText: 0,
+        skipContainerText: 0,
         skipInvalidImageSrc: 0,
         skipDecorativeImage: 0,
         skipSmallImage: 0,
@@ -262,6 +358,19 @@ export function extractPageContent(options = {}) {
       }
 
       const text = el.innerText?.trim() || '';
+      if (rule.text.skipIfHasDescendantSelector) {
+        let hasDescendant = false;
+        try {
+          hasDescendant = Boolean(el.querySelector(rule.text.skipIfHasDescendantSelector));
+        } catch {
+          hasDescendant = false;
+        }
+        if (hasDescendant) {
+          debug.counters.skipContainerText += 1;
+          continue;
+        }
+      }
+
       if (!text) {
         debug.counters.skipEmpty += 1;
         continue;
@@ -303,13 +412,17 @@ export function extractPageContent(options = {}) {
     contentSelectors: ['h1', 'h2', 'h3', 'p', 'img'],
   });
 
-  const { blocks, debug } = extractWithRule(activeRule || fallbackRule);
+  const targetRule = activeRule || fallbackRule;
+  const preloadDebug = {};
+  await preloadLazyContentIfNeeded(targetRule, preloadDebug);
+  const { blocks, debug } = extractWithRule(targetRule);
   const result = {
     blocks,
     debug: {
       host: hostname,
       matchedRuleId: activeRule?.id || fallbackRule.id,
       matchedRuleLabel: activeRule?.label || fallbackRule.label,
+      preload: preloadDebug.preload || null,
       ...debug,
     },
   };

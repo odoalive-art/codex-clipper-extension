@@ -30,10 +30,44 @@ export const DEFAULT_SITE_RULES = [
     text: {
       minLength: 1,
       dedupe: true,
+      skipIfHasDescendantSelector: '',
     },
     limits: {
       maxBlocks: 400,
       maxChars: 50000,
+    },
+  },
+  {
+    id: 'wechat-mp',
+    label: '公众号',
+    enabled: true,
+    match: {
+      hostEquals: 'mp.weixin.qq.com',
+    },
+    rootSelectors: ['#js_content', '.rich_media_content', 'article', 'main'],
+    titleSelectors: ['#activity-name .js_title_inner', '#activity-name', '.rich_media_title'],
+    contentSelectors: ['h1', 'h2', 'h3', 'p', 'section', 'li', 'blockquote', 'pre', 'div', 'img'],
+    exclude: {
+      ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
+      ancestorClassRegex:
+        '\\b(nav|header|footer|sidebar|menu|ad|advertisement|recommend|related|comment|copyright|share|toolbar|breadcrumb|qr_code|js_profile_qrcode|reward|wx_follow_card)\\b',
+      textRegex:
+        '^(收藏|关注|私信|点赞|评论|分享|举报|更多|展开|收起|查看|复制|下载|购买|加购|立即|确认|取消|返回|登录|注册|微信扫一扫关注该公众号)$',
+    },
+    image: {
+      srcAttrs: ['data-src', 'data-original', 'data-origin', 'src'],
+      minWidth: 0,
+      minHeight: 0,
+      rejectSrcRegex: '(avatar|icon|logo|emoji|badge|sprite|btn|button|arrow|loading|placeholder|qrcode)',
+    },
+    text: {
+      minLength: 1,
+      dedupe: true,
+      skipIfHasDescendantSelector: 'p, h1, h2, h3, li, blockquote, pre, section, div',
+    },
+    limits: {
+      maxBlocks: 500,
+      maxChars: 80000,
     },
   },
 ];
@@ -93,6 +127,8 @@ function normalizeRule(rule) {
     text: {
       minLength: Number.isFinite(rule.text?.minLength) ? Math.max(0, Number(rule.text.minLength)) : 1,
       dedupe: rule.text?.dedupe !== false,
+      skipIfHasDescendantSelector:
+        typeof rule.text?.skipIfHasDescendantSelector === 'string' ? rule.text.skipIfHasDescendantSelector : '',
     },
     limits: {
       maxBlocks: Number.isFinite(rule.limits?.maxBlocks) ? Math.max(1, Number(rule.limits.maxBlocks)) : 400,

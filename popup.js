@@ -140,13 +140,27 @@ function renderToPreview(blocks) {
   if (!preview.children.length) renderStatus('未能提取到有效内容', 'warn');
 }
 
-function renderDebug(debug) {
+function renderDebug(debug, blocksCount = 0) {
   if (!debugOutput) return;
   if (!debug) {
     debugOutput.textContent = '未启用调试或暂无调试信息';
     return;
   }
-  debugOutput.textContent = JSON.stringify(debug, null, 2);
+  const counters = debug.counters || {};
+  const candidates = Number(counters.candidates || 0);
+  const kept = Number(counters.kept || 0);
+  const keptRate = candidates > 0 ? `${((kept / candidates) * 100).toFixed(1)}%` : '0%';
+  const summaryLines = [
+    `host: ${debug.host || '-'}`,
+    `规则: ${debug.matchedRuleLabel || '-'} (${debug.matchedRuleId || '-'})`,
+    `root: ${debug.rootSelector || '-'}`,
+    `预加载: ${debug.preload?.enabled ? `已执行(steps=${debug.preload.steps || 0}, imgs=${debug.preload.imageCandidates || 0})` : '未执行'}`,
+    `候选: ${candidates}`,
+    `保留: ${kept} (保留率 ${keptRate})`,
+    `最终块数: ${blocksCount}`,
+  ];
+  const details = JSON.stringify(debug, null, 2);
+  debugOutput.textContent = `${summaryLines.join('\n')}\n\n---- raw debug ----\n${details}`;
 }
 
 async function loadSettings() {
@@ -215,12 +229,12 @@ grabBtn.addEventListener('click', async () => {
     const blocks = Array.isArray(payload?.blocks) ? payload.blocks : [];
     if (!blocks.length) {
       renderStatus('未能提取到有效内容', 'warn');
-      renderDebug(payload?.debug || null);
+      renderDebug(payload?.debug || null, blocks.length);
       return;
     }
 
     renderToPreview(blocks);
-    renderDebug(payload?.debug || null);
+    renderDebug(payload?.debug || null, blocks.length);
     setBtn(grabBtn, 'rotateCw', '重新抓取');
     copyBtn.style.display = 'flex';
   } catch (err) {
