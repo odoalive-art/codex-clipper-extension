@@ -2,8 +2,13 @@
   "manifest_version": 3,
   "name": "Clipper Studio Codex",
   "version": "1.0",
-  "action": {
-    "default_popup": "popup.html"
+  "action": {},
+  "background": {
+    "service_worker": "background.js"
   },
-  "permissions": ["activeTab", "scripting", "storage"]
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "permissions": ["activeTab", "scripting", "storage", "sidePanel"],
+  "host_permissions": ["http://*/*", "https://*/*"]
 }

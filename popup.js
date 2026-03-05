@@ -11,6 +11,8 @@ const resetRulesBtn = document.getElementById('resetRulesBtn');
 const copyRulesBtn = document.getElementById('copyRulesBtn');
 const debugOutput = document.getElementById('debugOutput');
 const debugModeCheckbox = document.getElementById('debugModeCheckbox');
+const statusChip = document.getElementById('statusChip');
+const countChip = document.getElementById('countChip');
 
 const SAFE_PROTOCOLS = new Set(['http:', 'https:']);
 
@@ -20,6 +22,8 @@ const state = {
 };
 
 const ICONS = {
+  bolt:
+    '<svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>',
   rotateCw:
     '<svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1 2.13-9"></path></svg>',
   check: '<svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>',
@@ -62,6 +66,9 @@ function renderStatus(message, kind = '') {
   p.className = `msg${kind ? ` ${kind}` : ''}`;
   p.textContent = message;
   preview.replaceChildren(p);
+  if (kind === 'error') setStatusChip('状态：失败', 'error');
+  else if (kind === 'warn') setStatusChip('状态：提醒', 'warn');
+  else setStatusChip('状态：就绪');
 }
 
 function renderRulesJson() {
@@ -82,6 +89,18 @@ function renderSiteBadges() {
     frag.appendChild(badge);
   });
   siteBadges.replaceChildren(frag);
+}
+
+function setStatusChip(text, tone = '') {
+  if (!statusChip) return;
+  statusChip.textContent = text;
+  statusChip.classList.remove('status-running', 'status-ok', 'status-warn', 'status-error');
+  if (tone) statusChip.classList.add(`status-${tone}`);
+}
+
+function setCountChip(count) {
+  if (!countChip) return;
+  countChip.textContent = `块数：${Math.max(0, Number(count) || 0)}`;
 }
 
 async function getActiveTab() {
@@ -137,7 +156,13 @@ function renderToPreview(blocks) {
   });
 
   preview.replaceChildren(frag);
-  if (!preview.children.length) renderStatus('未能提取到有效内容', 'warn');
+  if (!preview.children.length) {
+    setCountChip(0);
+    renderStatus('未能提取到有效内容', 'warn');
+    return;
+  }
+  setCountChip(preview.children.length);
+  setStatusChip('状态：已抓取', 'ok');
 }
 
 function renderDebug(debug, blocksCount = 0) {
@@ -170,6 +195,8 @@ async function loadSettings() {
   if (debugModeCheckbox) debugModeCheckbox.checked = state.debugMode;
   renderRulesJson();
   renderSiteBadges();
+  setStatusChip('状态：就绪');
+  setCountChip(preview.children.length || 0);
   await highlightCurrentSiteBadge();
 }
 
@@ -218,6 +245,8 @@ grabBtn.addEventListener('click', async () => {
   }
 
   grabBtn.disabled = true;
+  setBtn(grabBtn, 'rotateCw', '抓取中...');
+  setStatusChip('状态：抓取中', 'running');
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -228,6 +257,7 @@ grabBtn.addEventListener('click', async () => {
     const payload = results?.[0]?.result;
     const blocks = Array.isArray(payload?.blocks) ? payload.blocks : [];
     if (!blocks.length) {
+      setCountChip(0);
       renderStatus('未能提取到有效内容', 'warn');
       renderDebug(payload?.debug || null, blocks.length);
       return;
@@ -239,9 +269,13 @@ grabBtn.addEventListener('click', async () => {
     copyBtn.style.display = 'flex';
   } catch (err) {
     console.error('Grabbing failed:', err);
+    setCountChip(0);
     renderStatus('抓取失败，请刷新页面重试', 'error');
   } finally {
     grabBtn.disabled = false;
+    if (!grabBtn.textContent?.includes('重新抓取')) {
+      setBtn(grabBtn, 'bolt', '开始净化');
+    }
   }
 });
 
@@ -262,6 +296,7 @@ copyBtn.addEventListener('click', async () => {
 
   const md = lines.join('\n\n').trim();
   if (!md) {
+    setStatusChip('状态：无可复制内容', 'warn');
     renderStatus('当前没有可复制的内容', 'warn');
     return;
   }
@@ -270,9 +305,11 @@ copyBtn.addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(md);
     setBtn(copyBtn, 'check', '已存入剪贴板');
+    setStatusChip('状态：已复制', 'ok');
   } catch (err) {
     console.error('Copy failed:', err);
     setBtn(copyBtn, 'xCircle', '复制失败');
+    setStatusChip('状态：复制失败', 'error');
     renderStatus('复制失败，请重试', 'error');
   } finally {
     setTimeout(() => {

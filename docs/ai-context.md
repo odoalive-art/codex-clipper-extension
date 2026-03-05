@@ -7,41 +7,47 @@
 构建一个 Chrome 扩展，从网页中提取正文与图片并净化为可复制的 Markdown 内容，支持通过规则按站点定制提取逻辑。
 
 ## Current Status
-development
+development (image copy/import path available, but UX for Notion is still unsatisfactory)
 
 ## Current Features
 
 列出当前已经实现的主要功能。
 
-- 支持在弹窗中一键抓取当前标签页内容并预览
+- 支持在 Side Panel 中抓取当前标签页内容并预览（点击扩展图标打开）
 - 支持复制净化后的 Markdown（标题/段落/图片）到剪贴板
 - 支持基于站点规则提取内容（当前内置小报童、微信公众号）
 - 支持规则 JSON 可视化编辑、保存、重置与复制
 - 支持调试模式，展示命中规则、候选数量、过滤统计等信息
 - 支持针对微信公众号的惰性加载预滚动与图片等待策略
+- Side Panel UI 已升级状态反馈：显示抓取状态与提取块数，并优化可读性与滚动视觉
+- 已补充 `http/https` host 权限，保证 Side Panel 抓取可访问页面内容
+- 支持预览区“逐张复制图片”（二进制写入剪贴板）以提升公众号图片可用性
+- 支持导出 Notion 导入包（zip）：`article.md + images/*` 本地相对路径
 
 ## Development Focus
 
 当前开发重点。
 
-1. 提升跨站点提取鲁棒性（更多站点规则与通用回退策略）
-2. 补充回归测试与样例页面验证流程
-3. 完善文档与 AI 交接流程，确保跨设备会话可恢复
+1. 设计并落地图床上传方案（作为公众号图片进入 Notion 的主路径）
+2. 提升跨站点提取鲁棒性（更多站点规则与通用回退策略）
+3. 补充回归测试与样例页面验证流程
 
 ## Next Session
 
 下一会话建议按以下顺序继续：
 
 1. 先执行 `执行【上下文同步】`，确认当前分支与任务边界
-2. 开始高优先级任务：为 `extractor.js` 建立最小回归测试样例
-3. 评估并实施 `extractor.js` / `rules.js` 规则配置去重方案
+2. 高优先级开始图床方案：确定上传目标（S3/兼容对象存储）、签名/鉴权方式、URL 替换策略
+3. 修复中优先级 bug：Side Panel 打开时切换标签页后 `site badges` 不更新
+4. 开始高优先级任务：为 `extractor.js` 建立最小回归测试样例
 
 ## Key Files
 
 记录关键文件或模块。
 
 - `manifest.json`：Chrome 扩展清单与权限声明
-- `popup.html`：弹窗 UI 结构与样式
-- `popup.js`：UI 交互、规则管理、抓取触发、复制逻辑
+- `sidepanel.html`：Side Panel UI 结构与样式
+- `sidepanel.js`：Side Panel 交互、规则管理、抓取触发、复制逻辑
+- `background.js`：配置点击扩展图标时打开 Side Panel
 - `rules.js`：规则默认值、规范化、存储键与规则展示辅助
 - `extractor.js`：核心提取逻辑（节点过滤、图片处理、调试统计、回退规则）
