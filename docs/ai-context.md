@@ -7,7 +7,7 @@
 构建一个 Chrome 扩展，从网页中提取正文与图片并净化为可复制的 Markdown 内容，支持通过规则按站点定制提取逻辑。
 
 ## Current Status
-development (image copy/import path available, but UX for Notion is still unsatisfactory)
+development (sidepanel ui tuning landed; next focus is wechat image grabbing and image import reliability)
 
 ## Current Features
 

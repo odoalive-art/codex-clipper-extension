@@ -269,3 +269,28 @@ Notes:
   - `docs/dev-log.md`
 - Notes:
   - 本轮未执行自动化测试；当前环境缺少 `node`。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 将 UI 工作分支更名并清理旧远端分支。
+- Changes:
+  - 将当前分支从 `codex/ui-optimization-popup` 更名为 `codex/sidepanel-ui-tuning`
+  - 提交并推送当前 UI 调整到 `origin/codex/sidepanel-ui-tuning`
+  - 删除旧远端分支 `origin/codex/ui-optimization-popup`
+- Files Modified:
+  - `docs/dev-log.md`
+- Notes:
+  - 当前后续开发基线分支为 `codex/sidepanel-ui-tuning`。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 执行会话收尾，确认下一步转向公众号图片抓取问题。
+- Changes:
+  - 更新 `docs/ai-context.md`：当前状态明确为 UI 调整已落地，下一步聚焦公众号图片抓取与图片导入可靠性
+  - 复核 `docs/todo.md`：任务状态保持最新，无需额外调整
+  - 追加本条会话收尾记录
+- Files Modified:
+  - `docs/ai-context.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 下次启动建议从公众号图片抓取失败场景复现开始，先区分提取问题与图片读取问题。
