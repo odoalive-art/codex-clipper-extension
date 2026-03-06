@@ -349,3 +349,22 @@ Notes:
   - `docs/dev-log.md`
 - Notes:
   - 并发优化保持原文块顺序，避免图片与段落错位。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 回滚 Notion 极速模式，恢复图文顺序优先的发送逻辑。
+- Changes:
+  - 更新 `sidepanel.html`：移除 `极速模式` 开关
+  - 更新 `rules.js`：移除 `notionFastMode` 存储键
+  - 更新 `sidepanel.js`：恢复按原块顺序写入 Notion（保留并发上传但不后台拆阶段）
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `rules.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 保留“并发上传”优化，不再启用“正文先写、图片后台追加”模式，避免图文乱序。
