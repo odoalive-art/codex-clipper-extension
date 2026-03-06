@@ -35,3 +35,6 @@
 - [x] 新增 Notion 导入包导出（zip: `article.md + images/*`）
 - [x] 修复 Side Panel 打开后切换标签页时 `site badges` 不更新的问题
 - [x] 重整 Side Panel UI 模块结构（Header 去品牌、Footer `2+1` 交互）
+- [x] 抓取时拦截 `chrome://` 等不可注入页面并给出友好提示
+- [x] 新增悬浮调试模式按钮，可填充虚拟文本与占位图用于 UI 调整
+- [x] 统一 Side Panel 图标为本地 `icons.js` 中的 Lucide 风格 SVG 集合

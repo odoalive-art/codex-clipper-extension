@@ -200,3 +200,72 @@ Notes:
   - `docs/dev-log.md`
 - Notes:
   - 本地环境缺少 `node` 命令，未执行 `node --check sidepanel.js`。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 修复抓取 `chrome://` 页面时报错，改为前置拦截与友好提示。
+- Changes:
+  - 更新 `sidepanel.js`：新增 URL 协议校验，仅对 `http/https` 页面执行抓取注入
+  - 更新 `sidepanel.js`：在异常分支兼容 `Cannot access a chrome:// URL`，统一提示切换到普通网页
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 本地环境缺少 `node` 命令，未执行 `node --check sidepanel.js`。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 新增悬浮调试模式按钮，支持注入虚拟内容与占位图用于 UI 调试。
+- Changes:
+  - 更新 `sidepanel.html`：新增悬浮 `调试模式` 按钮并放置在内容区右下方
+  - 更新 `sidepanel.js`：新增本地虚拟 blocks、占位 SVG 图片和调试数据
+  - 更新 `sidepanel.js`：点击悬浮按钮后直接渲染样例内容并激活底部操作区
+  - 更新 `sidepanel.js`：新增 `normalizePreviewUrl`，允许 `data:` 图片在调试场景中渲染与复制
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 本地环境缺少 `node` 命令，未执行 `node --check sidepanel.js`。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 统一 Side Panel 图标来源，改为本地 Lucide 风格 SVG 集合。
+- Changes:
+  - 新增 `icons.js`：维护本地 Lucide 风格 SVG 图标资源
+  - 更新 `sidepanel.js`：按钮图标从 `icons.js` 注入，业务逻辑不再内嵌图标模板
+  - 更新 `sidepanel.html`：移除静态内联 SVG，统一由脚本注入按钮图标
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `icons.js`
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 未引入远程 CDN 或第三方依赖，保持扩展离线可用。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 按用户指定的 Lucide SVG 调整 Side Panel 按钮图标，并将下一步聚焦更新为公众号图片抓取问题。
+- Changes:
+  - 更新 `icons.js`：替换 `开始净化`、`重新抓取`、`复制`、`复制成功`、`复制失败`、`导出`、`调试模式` 的图标为用户指定版本
+  - 更新 `sidepanel.js`：复制按钮初始图标切换为 `copy`
+  - 更新 `docs/ai-context.md`：将下一步聚焦明确为公众号图片抓取问题
+- Files Modified:
+  - `icons.js`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 本轮未执行自动化测试；当前环境缺少 `node`。

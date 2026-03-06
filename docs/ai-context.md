@@ -25,13 +25,16 @@ development (image copy/import path available, but UX for Notion is still unsati
 - 支持导出 Notion 导入包（zip）：`article.md + images/*` 本地相对路径
 - 已修复 Side Panel 打开后切换标签页时 `site badges` 高亮不刷新的问题（监听 tab 激活/更新）
 - Side Panel UI 模块已重整：Header 去品牌、Footer 改为 `2+1` 交互（重新抓取/复制 Markdown/导出图标）
+- 抓取前会拦截 `chrome://` 等不可注入页面，提示切换到普通网页（http/https）
+- 新增悬浮 `调试模式` 按钮，可注入虚拟标题、正文与占位图，便于在任意页面调试 UI
+- Side Panel 交互图标已统一到本地 `icons.js` 的 Lucide 风格 SVG 集合，避免混用零散图标
 
 ## Development Focus
 
 当前开发重点。
 
-1. 设计并落地图床上传方案（作为公众号图片进入 Notion 的主路径）
-2. 提升跨站点提取鲁棒性（更多站点规则与通用回退策略）
+1. 继续处理公众号图片抓取问题（抓取稳定性、图片可用性与后续导入路径）
+2. 设计并落地图床上传方案（作为公众号图片进入 Notion 的主路径）
 3. 补充回归测试与样例页面验证流程
 
 ## Next Session
@@ -39,9 +42,9 @@ development (image copy/import path available, but UX for Notion is still unsati
 下一会话建议按以下顺序继续：
 
 1. 先执行 `执行【上下文同步】`，确认当前分支与任务边界
-2. 高优先级开始图床方案：确定上传目标（S3/兼容对象存储）、签名/鉴权方式、URL 替换策略
-3. 开始高优先级任务：为 `extractor.js` 建立最小回归测试样例
-4. 高优先级推进规则去重：消除 `extractor.js` 与 `rules.js` 双份维护
+2. 优先继续公众号图片抓取问题：确认当前失败场景、定位是提取阶段还是图片读取阶段
+3. 高优先级开始图床方案：确定上传目标（S3/兼容对象存储）、签名/鉴权方式、URL 替换策略
+4. 开始高优先级任务：为 `extractor.js` 建立最小回归测试样例
 
 ## Key Files
 

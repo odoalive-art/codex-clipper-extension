@@ -5,6 +5,7 @@
 - `manifest.json`：扩展入口与权限
 - `sidepanel.html`：Side Panel 页面
 - `sidepanel.js`：Side Panel 脚本主控层
+- `icons.js`：本地 Lucide 风格 SVG 图标资源
 - `background.js`：扩展后台脚本（配置点击图标打开 Side Panel）
 - `rules.js`：规则定义与归一化模块
 - `extractor.js`：注入页面执行的内容提取模块
@@ -16,6 +17,9 @@
   - 管理抓取按钮、复制按钮、规则编辑区域与调试面板
   - 管理导出按钮，生成 Notion 导入包（zip）
   - 管理 Footer `2+1` 交互布局状态（抓取后显示复制与导出图标按钮）
+  - 抓取前校验标签页 URL 协议，拦截不可注入页面（如 `chrome://`）
+  - 提供悬浮调试入口，渲染本地虚拟 blocks 与 debug 数据用于 UI 调整
+  - 通过 `icons.js` 注入本地 Lucide 风格图标，统一按钮与状态图标来源
   - 管理顶部状态芯片（抓取状态、提取块数）与按钮加载态反馈
   - 监听标签页激活/更新，实时刷新站点识别徽标（site badges）
   - 为预览图片提供单图复制（二进制剪贴板）交互

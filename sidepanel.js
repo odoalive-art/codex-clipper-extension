@@ -1,4 +1,5 @@
 import { extractPageContent } from './extractor.js';
+import { renderIcon } from './icons.js';
 import { STORAGE_KEYS, getDefaultRules, normalizeRules, ruleHostText } from './rules.js';
 
 const grabBtn = document.getElementById('grabBtn');
@@ -15,8 +16,10 @@ const statusChip = document.getElementById('statusChip');
 const countChip = document.getElementById('countChip');
 const exportNotionBtn = document.getElementById('exportNotionBtn');
 const footer = document.querySelector('.footer');
+const debugMockBtn = document.getElementById('debugMockBtn');
 
 const SAFE_PROTOCOLS = new Set(['http:', 'https:']);
+const PREVIEW_PROTOCOLS = new Set(['http:', 'https:', 'data:', 'blob:']);
 
 const state = {
   rules: getDefaultRules(),
@@ -24,18 +27,70 @@ const state = {
   activeHost: '',
 };
 
-const ICONS = {
-  bolt:
-    '<svg class="icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>',
-  rotateCw:
-    '<svg class="icon" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1 2.13-9"></path></svg>',
-  check: '<svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>',
-  xCircle:
-    '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
+function createPlaceholderImageDataUrl(title, toneA, toneB) {
+  const safeTitle = escapeHtml(title);
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+      <defs>
+        <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="${toneA}" />
+          <stop offset="100%" stop-color="${toneB}" />
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="720" rx="36" fill="url(#g)" />
+      <circle cx="1030" cy="120" r="120" fill="rgba(255,255,255,0.18)" />
+      <circle cx="220" cy="560" r="160" fill="rgba(255,255,255,0.12)" />
+      <rect x="84" y="84" width="188" height="30" rx="15" fill="rgba(255,255,255,0.22)" />
+      <text x="84" y="290" fill="#ffffff" font-family="SF Pro Display, Arial, sans-serif" font-size="68" font-weight="700">${safeTitle}</text>
+      <text x="84" y="362" fill="rgba(255,255,255,0.86)" font-family="SF Pro Text, Arial, sans-serif" font-size="28">Debug placeholder image for UI tuning</text>
+    </svg>
+  `.trim();
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+const DEBUG_MOCK_PAYLOAD = {
+  blocks: [
+    { type: 'h1', content: '把文章净化成能直接粘进 Notion 的版本' },
+    { type: 'p', content: '这是调试模式生成的虚拟内容，用来模拟真实文章的排版密度、长段落换行、按钮状态和图片区块，不依赖当前网页是否可抓取。' },
+    { type: 'p', content: '你可以在任何页面点击这个悬浮按钮，快速填充标题、正文、二级标题、图片和长文段落，专门用于调字体、留白、按钮层级、卡片边界和滚动表现。' },
+    { type: 'img', src: createPlaceholderImageDataUrl('Hero Cover', '#2563eb', '#0f172a') },
+    { type: 'h2', content: '为什么这个模式有用' },
+    { type: 'p', content: '很多页面是 chrome://、新标签页、登录后内容或者短文页面，根本无法稳定复现最终视觉。调试模式把 UI 调整和抓取能力拆开，让界面设计可以独立推进。' },
+    { type: 'h3', content: '模拟真实使用场景' },
+    { type: 'p', content: '这里保留了较长的中文段落、多个标题层级、图片区块和底部操作区显隐状态。你可以直接观察滚动手感、图片按钮位置、状态 chip 密度，以及 footer 在有内容时的空间分配。' },
+    { type: 'img', src: createPlaceholderImageDataUrl('Inline Visual', '#ec4899', '#7c3aed') },
+    { type: 'p', content: '如果你只是在调圆角、字号、色值、间距、边框或阴影，这个模式比不断切换网页更高效。等视觉确定后，再回到真实抓取链路验证即可。' },
+  ],
+  debug: {
+    host: 'debug.mock.local',
+    matchedRuleId: 'debug-preview',
+    matchedRuleLabel: '调试样例',
+    rootSelector: '#preview',
+    preload: { enabled: false },
+    counters: {
+      candidates: 12,
+      kept: 10,
+      skipNoiseAncestor: 1,
+      skipNoiseText: 0,
+      skipEmpty: 1,
+      skipDuplicateText: 0,
+      skipContainerText: 0,
+      skipInvalidImageSrc: 0,
+      skipDecorativeImage: 0,
+      skipSmallImage: 0,
+      skipDuplicateImage: 0,
+      stopByMaxBlocks: 0,
+      stopByMaxChars: 0,
+    },
+  },
 };
 
 function setBtn(btn, icon, label) {
-  btn.innerHTML = `${ICONS[icon] || ''}<span class="btn-text">${label}</span>`;
+  btn.innerHTML = `${renderIcon(icon)}<span class="btn-text">${label}</span>`;
+}
+
+function setIconOnlyBtn(btn, icon, label = '') {
+  btn.innerHTML = `${renderIcon(icon)}${label ? `<span class="btn-text">${label}</span>` : ''}`;
 }
 
 function normalizeHttpUrl(raw) {
@@ -43,6 +98,16 @@ function normalizeHttpUrl(raw) {
   try {
     const url = new URL(raw, location.href);
     return SAFE_PROTOCOLS.has(url.protocol) ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
+function normalizePreviewUrl(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) return '';
+  try {
+    const url = new URL(raw, location.href);
+    return PREVIEW_PROTOCOLS.has(url.protocol) ? url.href : '';
   } catch {
     return '';
   }
@@ -121,6 +186,16 @@ function hostFromUrl(rawUrl) {
   }
 }
 
+function canInjectOnUrl(rawUrl) {
+  if (typeof rawUrl !== 'string' || !rawUrl.trim()) return false;
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 async function highlightCurrentSiteBadge() {
   const badges = Array.from(document.querySelectorAll('.site-badge[data-rule-id]'));
   badges.forEach(badge => badge.classList.remove('active'));
@@ -179,7 +254,7 @@ function renderToPreview(blocks) {
   blocks.forEach(block => {
     if (!block || typeof block !== 'object') return;
     if (block.type === 'img') {
-      const src = normalizeHttpUrl(block.src);
+      const src = normalizePreviewUrl(block.src);
       if (!src) return;
 
       const card = document.createElement('div');
@@ -640,7 +715,7 @@ async function buildClipboardPayload() {
       return null;
     })();
     if (imageNode instanceof HTMLImageElement) {
-      const src = normalizeHttpUrl(imageNode.getAttribute('src') || imageNode.src || '');
+      const src = normalizePreviewUrl(imageNode.getAttribute('src') || imageNode.src || '');
       if (!src) continue;
       markdownLines.push(`![](${src})`);
       let htmlSrc = src;
@@ -668,16 +743,29 @@ async function buildClipboardPayload() {
   };
 }
 
+function renderDebugMock() {
+  state.activeHost = 'debug.mock.local';
+  renderToPreview(DEBUG_MOCK_PAYLOAD.blocks);
+  renderDebug(DEBUG_MOCK_PAYLOAD.debug, DEBUG_MOCK_PAYLOAD.blocks.length);
+  setBtn(grabBtn, 'refreshCw', '重新抓取');
+  setStatusChip('状态：调试样例', 'ok');
+}
+
 grabBtn.addEventListener('click', async () => {
   const tab = await getActiveTab();
   if (!tab?.id) {
     renderStatus('未找到可用标签页', 'error');
     return;
   }
+  if (!canInjectOnUrl(tab.url || '')) {
+    setCountChip(0);
+    renderStatus('当前页面不支持抓取，请切换到普通网页（http/https）后重试。', 'warn');
+    return;
+  }
   state.activeHost = hostFromUrl(tab.url);
 
   grabBtn.disabled = true;
-  setBtn(grabBtn, 'rotateCw', '抓取中...');
+  setBtn(grabBtn, 'refreshCw', '抓取中...');
   setStatusChip('状态：抓取中', 'running');
   try {
     const results = await chrome.scripting.executeScript({
@@ -706,20 +794,20 @@ grabBtn.addEventListener('click', async () => {
       }
     }
     renderDebug(payload?.debug || null, blocks.length);
-    setBtn(grabBtn, 'rotateCw', '重新抓取');
+    setBtn(grabBtn, 'refreshCw', '重新抓取');
   } catch (err) {
     console.error('Grabbing failed:', err);
     setCountChip(0);
     const message = typeof err?.message === 'string' ? err.message : '';
-    if (message.includes('Cannot access contents of the page')) {
-      renderStatus('抓取失败：缺少当前站点权限。请重载扩展后重试。', 'error');
+    if (message.includes('Cannot access contents of the page') || message.includes('Cannot access a chrome:// URL')) {
+      renderStatus('当前页面不支持抓取，请切换到普通网页（http/https）后重试。', 'warn');
     } else {
       renderStatus('抓取失败，请刷新页面重试', 'error');
     }
   } finally {
     grabBtn.disabled = false;
     if (!grabBtn.textContent?.includes('重新抓取')) {
-      setBtn(grabBtn, 'bolt', '开始净化');
+      setBtn(grabBtn, 'zap', '开始净化');
     }
   }
 });
@@ -780,7 +868,7 @@ copyBtn.addEventListener('click', async () => {
     setStatusChip(copiedStatus, 'ok');
   } catch (err) {
     console.error('Copy failed:', err);
-    setBtn(copyBtn, 'xCircle', '复制失败');
+    setBtn(copyBtn, 'circleX', '复制失败');
     setStatusChip('状态：复制失败', 'error');
     renderStatus('复制失败，请重试', 'error');
   } finally {
@@ -845,6 +933,15 @@ debugModeCheckbox?.addEventListener('change', async () => {
   state.debugMode = Boolean(debugModeCheckbox.checked);
   await chrome.storage.local.set({ [STORAGE_KEYS.debugMode]: state.debugMode });
 });
+
+debugMockBtn?.addEventListener('click', () => {
+  renderDebugMock();
+});
+
+setBtn(grabBtn, 'zap', '开始净化');
+setBtn(copyBtn, 'copy', '复制 Markdown');
+setIconOnlyBtn(exportNotionBtn, 'download', '导出 Notion 包');
+setIconOnlyBtn(debugMockBtn, 'flaskConical', '调试模式');
 
 loadSettings().catch(err => {
   console.error('Load settings failed:', err);
