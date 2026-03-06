@@ -165,3 +165,38 @@ Notes:
   - `docs/dev-log.md`
 - Notes:
   - 用户反馈：当前“本地导入/混合复制”能力可用但体验不佳，后续以图床路径为主。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 修复 Side Panel 在切换标签页后 `site badges` 高亮不刷新的问题。
+- Changes:
+  - 更新 `sidepanel.js`：`highlightCurrentSiteBadge` 每次刷新先清空旧高亮，再按当前激活标签页重算
+  - 更新 `sidepanel.js`：新增 tab 事件监听（`onActivated`、`onUpdated`、`onRemoved`）与 `visibilitychange` 回补刷新
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 本地环境缺少 `node` 命令，未执行 `node --check sidepanel.js`。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 按模块化方案重整 Side Panel UI，优化整体框架与底部交互区。
+- Changes:
+  - 更新 `sidepanel.html`：Header 去除品牌，仅保留 `site badges + 状态 chips`
+  - 更新 `sidepanel.html`：Footer 改为 `2+1` 布局（`重新抓取`、`复制 Markdown`、导出图标按钮 + hover 提示）
+  - 更新 `sidepanel.html`：预览图片区按钮改为浮层样式，工具区视觉降级并限制输入/调试区域高度
+  - 更新 `sidepanel.js`：抓取结果驱动 Footer `has-results` 状态，统一控制次级操作按钮显示
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 本地环境缺少 `node` 命令，未执行 `node --check sidepanel.js`。

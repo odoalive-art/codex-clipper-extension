@@ -10,7 +10,6 @@
 ## Medium Priority
 中优先级。
 
-- [ ] 修复 Side Panel 打开时切换标签页后，站点识别标签（site badges）不更新的问题
 - [ ] 在 `sidepanel.js` 增加规则 JSON 校验错误定位（指出具体字段）
 - [ ] 增加更多站点规则模板与规则导入示例
 - [ ] 优化“导出 Notion 包”交互（导出进度、失败图片提示、文件命名策略）
@@ -34,3 +33,5 @@
 - [x] 新增 `docs/git-workflow.md` 并加入 `执行【Git工作流】` 指令模板
 - [x] 预览区支持逐张复制图片（二进制剪贴板）
 - [x] 新增 Notion 导入包导出（zip: `article.md + images/*`）
+- [x] 修复 Side Panel 打开后切换标签页时 `site badges` 不更新的问题
+- [x] 重整 Side Panel UI 模块结构（Header 去品牌、Footer `2+1` 交互）

@@ -23,6 +23,8 @@ development (image copy/import path available, but UX for Notion is still unsati
 - 已补充 `http/https` host 权限，保证 Side Panel 抓取可访问页面内容
 - 支持预览区“逐张复制图片”（二进制写入剪贴板）以提升公众号图片可用性
 - 支持导出 Notion 导入包（zip）：`article.md + images/*` 本地相对路径
+- 已修复 Side Panel 打开后切换标签页时 `site badges` 高亮不刷新的问题（监听 tab 激活/更新）
+- Side Panel UI 模块已重整：Header 去品牌、Footer 改为 `2+1` 交互（重新抓取/复制 Markdown/导出图标）
 
 ## Development Focus
 
@@ -38,8 +40,8 @@ development (image copy/import path available, but UX for Notion is still unsati
 
 1. 先执行 `执行【上下文同步】`，确认当前分支与任务边界
 2. 高优先级开始图床方案：确定上传目标（S3/兼容对象存储）、签名/鉴权方式、URL 替换策略
-3. 修复中优先级 bug：Side Panel 打开时切换标签页后 `site badges` 不更新
-4. 开始高优先级任务：为 `extractor.js` 建立最小回归测试样例
+3. 开始高优先级任务：为 `extractor.js` 建立最小回归测试样例
+4. 高优先级推进规则去重：消除 `extractor.js` 与 `rules.js` 双份维护
 
 ## Key Files
 

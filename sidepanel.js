@@ -14,6 +14,7 @@ const debugModeCheckbox = document.getElementById('debugModeCheckbox');
 const statusChip = document.getElementById('statusChip');
 const countChip = document.getElementById('countChip');
 const exportNotionBtn = document.getElementById('exportNotionBtn');
+const footer = document.querySelector('.footer');
 
 const SAFE_PROTOCOLS = new Set(['http:', 'https:']);
 
@@ -68,6 +69,7 @@ function renderStatus(message, kind = '') {
   p.className = `msg${kind ? ` ${kind}` : ''}`;
   p.textContent = message;
   preview.replaceChildren(p);
+  footer?.classList.remove('has-results');
   if (kind === 'error') setStatusChip('状态：失败', 'error');
   else if (kind === 'warn') setStatusChip('状态：提醒', 'warn');
   else setStatusChip('状态：就绪');
@@ -120,20 +122,55 @@ function hostFromUrl(rawUrl) {
 }
 
 async function highlightCurrentSiteBadge() {
+  const badges = Array.from(document.querySelectorAll('.site-badge[data-rule-id]'));
+  badges.forEach(badge => badge.classList.remove('active'));
+
   const tab = await getActiveTab();
-  if (!tab?.url) return;
+  if (!tab?.url) {
+    state.activeHost = '';
+    return;
+  }
+
   let host = '';
   try {
     host = new URL(tab.url).hostname;
   } catch {
+    state.activeHost = '';
     return;
   }
 
-  document.querySelectorAll('.site-badge[data-rule-id]').forEach(badge => {
+  state.activeHost = host;
+  badges.forEach(badge => {
     const rule = state.rules.find(item => item.id === badge.dataset.ruleId);
     if (rule && hostMatchesRule(host, rule)) {
       badge.classList.add('active');
     }
+  });
+}
+
+function bindTabChangeListeners() {
+  const refresh = () => {
+    highlightCurrentSiteBadge().catch(err => {
+      console.warn('Refresh site badges failed:', err);
+    });
+  };
+
+  chrome.tabs.onActivated.addListener(() => {
+    refresh();
+  });
+
+  chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+    if (!tab?.active) return;
+    if (!changeInfo.url && changeInfo.status !== 'complete') return;
+    refresh();
+  });
+
+  chrome.tabs.onRemoved.addListener(() => {
+    refresh();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refresh();
   });
 }
 
@@ -184,6 +221,7 @@ function renderToPreview(blocks) {
     return;
   }
   setCountChip(preview.children.length);
+  footer?.classList.add('has-results');
   setStatusChip('状态：已抓取', 'ok');
 }
 
@@ -669,8 +707,6 @@ grabBtn.addEventListener('click', async () => {
     }
     renderDebug(payload?.debug || null, blocks.length);
     setBtn(grabBtn, 'rotateCw', '重新抓取');
-    copyBtn.style.display = 'flex';
-    if (exportNotionBtn) exportNotionBtn.style.display = 'flex';
   } catch (err) {
     console.error('Grabbing failed:', err);
     setCountChip(0);
@@ -814,3 +850,5 @@ loadSettings().catch(err => {
   console.error('Load settings failed:', err);
   renderSiteBadges();
 });
+
+bindTabChangeListeners();

@@ -15,7 +15,9 @@
 - Side Panel Controller (`sidepanel.js`)
   - 管理抓取按钮、复制按钮、规则编辑区域与调试面板
   - 管理导出按钮，生成 Notion 导入包（zip）
+  - 管理 Footer `2+1` 交互布局状态（抓取后显示复制与导出图标按钮）
   - 管理顶部状态芯片（抓取状态、提取块数）与按钮加载态反馈
+  - 监听标签页激活/更新，实时刷新站点识别徽标（site badges）
   - 为预览图片提供单图复制（二进制剪贴板）交互
   - 读取/保存 `chrome.storage.local` 中的规则与调试开关
   - 通过 `chrome.scripting.executeScript` 调用页面内提取函数
