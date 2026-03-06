@@ -16,7 +16,10 @@
 - Side Panel Controller (`sidepanel.js`)
   - 管理抓取按钮、复制按钮、规则编辑区域与调试面板
   - 管理导出按钮，生成 Notion 导入包（zip）
-  - 管理 Footer `2+1` 交互布局状态（抓取后显示复制与导出图标按钮）
+  - 管理 Notion 直连配置（Token、Parent Page），支持连接验证与可写页面自动发现
+  - 调用 Notion API 创建页面/上传图片并写入 block
+  - 对公众号预览图片本地化与 Notion 上传采用限流并发，降低多图场景等待时间
+  - 管理 Footer 结果态交互布局（抓取后显示复制、导出、发送 Notion）
   - 抓取前校验标签页 URL 协议，拦截不可注入页面（如 `chrome://`）
   - 提供悬浮调试入口，渲染本地虚拟 blocks 与 debug 数据用于 UI 调整
   - 通过 `icons.js` 注入本地 Lucide 风格图标，统一按钮与状态图标来源
@@ -45,6 +48,7 @@
 4. `sidepanel.js` 将 blocks 渲染为预览 DOM
 5. 用户可选择复制内容，或逐图复制图片二进制
 6. 用户可导出 `article.md + images/*` 的 zip 包并在 Notion 中 Import
+7. 用户可直接发送到 Notion：创建子页面、写入文本块、上传图片并插入 `image.file_upload` 块
 
 ## External Dependencies
 
@@ -57,3 +61,4 @@
   - `http://*/*`
   - `https://*/*`
 - 无第三方 npm 依赖（当前为原生 JS 模块实现）
+- Notion API（`/pages`、`/blocks/{id}/children`、`/file_uploads`）

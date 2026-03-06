@@ -11,6 +11,8 @@ export const LUCIDE_ICONS = {
     '<svg class="icon lucide lucide-squircle-dashed-icon lucide-squircle-dashed" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.77 3.043a34 34 0 0 0-3.54 0"></path><path d="M13.771 20.956a33 33 0 0 1-3.541.001"></path><path d="M20.18 17.74c-.51 1.15-1.29 1.93-2.439 2.44"></path><path d="M20.18 6.259c-.51-1.148-1.291-1.929-2.44-2.438"></path><path d="M20.957 10.23a33 33 0 0 1 0 3.54"></path><path d="M3.043 10.23a34 34 0 0 0 .001 3.541"></path><path d="M6.26 20.179c-1.15-.508-1.93-1.29-2.44-2.438"></path><path d="M6.26 3.82c-1.149.51-1.93 1.291-2.44 2.44"></path></svg>',
   download:
     '<svg class="icon lucide lucide-folder-down-icon lucide-folder-down" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path><path d="M12 10v6"></path><path d="m15 13-3 3-3-3"></path></svg>',
+  send:
+    '<svg class="icon lucide lucide-send-icon lucide-send" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg>',
   flaskConical:
     '<svg class="icon lucide lucide-message-square-code-icon lucide-message-square-code" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"></path><path d="m10 8-3 3 3 3"></path><path d="m14 14 3-3-3-3"></path></svg>',
 };

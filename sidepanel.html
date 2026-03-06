@@ -222,6 +222,53 @@
     .tool-row input[type="checkbox"] {
       margin: 0;
     }
+    .tool-row.stretch {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .tool-row.stretch label {
+      width: 100%;
+      display: block;
+      color: #475569;
+      margin-bottom: 4px;
+    }
+    .tool-row.stretch input[type="password"],
+    .tool-row.stretch input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      min-height: 30px;
+      padding: 6px 8px;
+      font-size: 12px;
+      color: #111827;
+      background: #fff;
+    }
+    .tool-hint {
+      margin-top: 6px;
+      color: #64748b;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .tool-row select {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      min-height: 30px;
+      padding: 6px 8px;
+      font-size: 12px;
+      color: #111827;
+      background: #fff;
+    }
+    .inline-status {
+      margin-top: 6px;
+      color: #64748b;
+      font-size: 11px;
+      line-height: 1.4;
+      min-height: 16px;
+      word-break: break-word;
+    }
     .mini-btn {
       border: 1px solid #d8d8de;
       background: #fff;
@@ -264,7 +311,7 @@
       gap: 10px;
     }
     .footer.has-results {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
     }
     .btn {
       padding: 12px 14px;
@@ -412,6 +459,30 @@
         </div>
         <pre id="debugOutput"></pre>
       </details>
+      <details>
+        <summary>Notion 直连</summary>
+        <div class="tool-row stretch">
+          <label for="notionTokenInput">Integration Token</label>
+          <input id="notionTokenInput" type="password" placeholder="ntn_..." autocomplete="off">
+        </div>
+        <div class="tool-row stretch">
+          <label for="notionParentPageInput">Parent Page ID / URL</label>
+          <input id="notionParentPageInput" type="text" placeholder="页面链接或 ID">
+        </div>
+        <div class="tool-row">
+          <button id="saveNotionConfigBtn" class="mini-btn">保存 Notion 配置</button>
+          <button id="notionVerifyBtn" class="mini-btn">验证连接</button>
+          <button id="notionDiscoverPagesBtn" class="mini-btn">自动发现页面</button>
+        </div>
+        <div class="tool-row stretch">
+          <label for="notionPageSelect">可写页面（选择后自动填充 Parent Page）</label>
+          <select id="notionPageSelect">
+            <option value="">请先点击“自动发现页面”</option>
+          </select>
+        </div>
+        <div id="notionConfigStatus" class="inline-status"></div>
+        <div class="tool-hint">请先在 Notion 把目标页面分享给你的 Integration（Add connections）。</div>
+      </details>
     </div>
 
     <div class="footer">
@@ -423,6 +494,9 @@
       </button>
       <button id="exportNotionBtn" class="btn btn-icon" aria-label="导出 Notion 包" data-tooltip="导出 Notion 包">
         <span class="btn-text">导出 Notion 包</span>
+      </button>
+      <button id="clipToNotionBtn" class="btn btn-icon" aria-label="发送到 Notion" data-tooltip="发送到 Notion">
+        <span class="btn-text">发送到 Notion</span>
       </button>
     </div>
     <button id="debugMockBtn" class="debug-fab" type="button">

@@ -294,3 +294,58 @@ Notes:
   - `docs/dev-log.md`
 - Notes:
   - 下次启动建议从公众号图片抓取失败场景复现开始，先区分提取问题与图片读取问题。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 新增 Notion 直连剪藏能力，可从 Side Panel 直接创建页面并上传图片。
+- Changes:
+  - 更新 `sidepanel.html`：新增 `Notion 直连` 配置区（Token + Parent Page ID）与 `发送到 Notion` 按钮
+  - 更新 `sidepanel.js`：新增 Notion 配置持久化、页面创建、块写入、图片上传（`file_uploads`）流程
+  - 更新 `rules.js`：新增 Notion 配置相关 storage key
+  - 更新 `icons.js`：新增 `send` 图标
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `rules.js`
+  - `icons.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - Notion 直连依赖用户提供 Integration Token，并确保目标父页面已授权给该 Integration。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 简化 Notion 配置流程，新增连接验证与可写页面自动发现。
+- Changes:
+  - 更新 `sidepanel.html`：在 `Notion 直连` 区域增加 `验证连接`、`自动发现页面`、可写页面下拉选择与内联状态提示
+  - 更新 `sidepanel.js`：新增 `users/me` 验证、`search` 自动发现页面、选择页面自动回填 Parent Page
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 当前仍为前端直连，Token 存储在 `chrome.storage.local`，后续可考虑改为后端托管或短时会话凭证。
+
+### 2026-03-06 (Asia/Shanghai)
+- Author: Codex
+- Summary: 优化多图场景速度，降低公众号本地化与 Notion 发送等待时间。
+- Changes:
+  - 更新 `sidepanel.js`：新增通用并发工具 `mapWithConcurrency`
+  - 更新 `sidepanel.js`：微信公众号图片本地化由串行改为并发（limit=4）
+  - 更新 `sidepanel.js`：Notion 图片上传由串行改为限流并发（limit=3），并显示图片上传进度
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 并发优化保持原文块顺序，避免图片与段落错位。

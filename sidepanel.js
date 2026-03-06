@@ -15,16 +15,29 @@ const debugModeCheckbox = document.getElementById('debugModeCheckbox');
 const statusChip = document.getElementById('statusChip');
 const countChip = document.getElementById('countChip');
 const exportNotionBtn = document.getElementById('exportNotionBtn');
+const clipToNotionBtn = document.getElementById('clipToNotionBtn');
+const notionTokenInput = document.getElementById('notionTokenInput');
+const notionParentPageInput = document.getElementById('notionParentPageInput');
+const saveNotionConfigBtn = document.getElementById('saveNotionConfigBtn');
+const notionVerifyBtn = document.getElementById('notionVerifyBtn');
+const notionDiscoverPagesBtn = document.getElementById('notionDiscoverPagesBtn');
+const notionPageSelect = document.getElementById('notionPageSelect');
+const notionConfigStatus = document.getElementById('notionConfigStatus');
 const footer = document.querySelector('.footer');
 const debugMockBtn = document.getElementById('debugMockBtn');
 
 const SAFE_PROTOCOLS = new Set(['http:', 'https:']);
 const PREVIEW_PROTOCOLS = new Set(['http:', 'https:', 'data:', 'blob:']);
+const NOTION_API_BASE = 'https://api.notion.com/v1';
+const NOTION_VERSION = '2025-09-03';
 
 const state = {
   rules: getDefaultRules(),
   debugMode: true,
   activeHost: '',
+  notionToken: '',
+  notionParentPageId: '',
+  notionPageCandidates: [],
 };
 
 function createPlaceholderImageDataUrl(title, toneA, toneB) {
@@ -324,15 +337,81 @@ function renderDebug(debug, blocksCount = 0) {
 }
 
 async function loadSettings() {
-  const stored = await chrome.storage.local.get([STORAGE_KEYS.siteRules, STORAGE_KEYS.debugMode]);
+  const stored = await chrome.storage.local.get([
+    STORAGE_KEYS.siteRules,
+    STORAGE_KEYS.debugMode,
+    STORAGE_KEYS.notionToken,
+    STORAGE_KEYS.notionParentPageId,
+  ]);
   state.rules = normalizeRules(stored[STORAGE_KEYS.siteRules]);
   state.debugMode = stored[STORAGE_KEYS.debugMode] !== false;
+  state.notionToken = typeof stored[STORAGE_KEYS.notionToken] === 'string' ? stored[STORAGE_KEYS.notionToken].trim() : '';
+  state.notionParentPageId =
+    typeof stored[STORAGE_KEYS.notionParentPageId] === 'string' ? stored[STORAGE_KEYS.notionParentPageId].trim() : '';
   if (debugModeCheckbox) debugModeCheckbox.checked = state.debugMode;
+  if (notionTokenInput) notionTokenInput.value = state.notionToken;
+  if (notionParentPageInput) notionParentPageInput.value = state.notionParentPageId;
+  applyNotionPageCandidates([]);
+  setNotionConfigStatus('');
   renderRulesJson();
   renderSiteBadges();
   setStatusChip('状态：就绪');
   setCountChip(preview.children.length || 0);
   await highlightCurrentSiteBadge();
+}
+
+async function saveNotionConfig() {
+  const notionToken = notionTokenInput?.value?.trim() || '';
+  const notionParentPageId = notionParentPageInput?.value?.trim() || '';
+  state.notionToken = notionToken;
+  state.notionParentPageId = notionParentPageId;
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.notionToken]: notionToken,
+    [STORAGE_KEYS.notionParentPageId]: notionParentPageId,
+  });
+  setStatusChip('状态：Notion配置已保存', 'ok');
+}
+
+function setNotionConfigStatus(message, tone = '') {
+  if (!notionConfigStatus) return;
+  notionConfigStatus.textContent = message || '';
+  notionConfigStatus.style.color =
+    tone === 'error' ? '#b91c1c' : tone === 'ok' ? '#15803d' : tone === 'warn' ? '#b45309' : '#64748b';
+}
+
+function notionPageTitleFromObject(page) {
+  if (!page || typeof page !== 'object') return '';
+  const properties = page.properties && typeof page.properties === 'object' ? Object.values(page.properties) : [];
+  for (const property of properties) {
+    if (property?.type === 'title' && Array.isArray(property.title)) {
+      const text = property.title.map(part => part?.plain_text || '').join('').trim();
+      if (text) return text;
+    }
+  }
+  return '';
+}
+
+function applyNotionPageCandidates(pages) {
+  if (!notionPageSelect) return;
+  const selected = toNotionUuid(notionParentPageInput?.value || state.notionParentPageId);
+  const frag = document.createDocumentFragment();
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = pages.length ? '请选择一个可写页面' : '未发现可写页面';
+  frag.appendChild(placeholder);
+
+  pages.forEach(page => {
+    const option = document.createElement('option');
+    option.value = page.id;
+    const title = page.title || 'Untitled';
+    option.textContent = title;
+    option.title = page.url || page.id;
+    if (selected && page.id === selected) option.selected = true;
+    frag.appendChild(option);
+  });
+
+  notionPageSelect.replaceChildren(frag);
 }
 
 async function saveRulesFromInput() {
@@ -417,6 +496,262 @@ function sanitizeFilename(raw, fallback = 'article') {
     .trim();
   if (!cleaned) return fallback;
   return cleaned.slice(0, 80);
+}
+
+function toNotionUuid(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  const direct = value.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0];
+  if (direct) return direct.toLowerCase();
+
+  const plain = value.replace(/[^0-9a-f]/gi, '');
+  const hit = plain.match(/[0-9a-f]{32}/i)?.[0];
+  if (!hit) return '';
+  const source = hit.toLowerCase();
+  return `${source.slice(0, 8)}-${source.slice(8, 12)}-${source.slice(12, 16)}-${source.slice(16, 20)}-${source.slice(20, 32)}`;
+}
+
+function splitTextForNotion(raw, chunkSize = 1800) {
+  const text = String(raw || '').trim();
+  if (!text) return [];
+  if (text.length <= chunkSize) return [text];
+
+  const chunks = [];
+  let start = 0;
+  while (start < text.length) {
+    const maxEnd = Math.min(text.length, start + chunkSize);
+    let end = maxEnd;
+    if (maxEnd < text.length) {
+      const breakAt = text.lastIndexOf('\n', maxEnd);
+      if (breakAt > start + Math.floor(chunkSize * 0.45)) {
+        end = breakAt;
+      }
+    }
+    const part = text.slice(start, end).trim();
+    if (part) chunks.push(part);
+    start = end;
+  }
+  return chunks;
+}
+
+function textBlockToNotion(blockType, content) {
+  const parts = splitTextForNotion(content);
+  if (!parts.length) return [];
+  const blockName =
+    blockType === 'h1' ? 'heading_1' : blockType === 'h2' ? 'heading_2' : blockType === 'h3' ? 'heading_3' : 'paragraph';
+
+  return parts.map(part => ({
+    object: 'block',
+    type: blockName,
+    [blockName]: {
+      rich_text: [
+        {
+          type: 'text',
+          text: {
+            content: part,
+          },
+        },
+      ],
+    },
+  }));
+}
+
+function collectPreviewBlocks() {
+  const blocks = [];
+  for (const node of Array.from(preview.childNodes)) {
+    const tag = node.nodeName;
+    const text = node.textContent?.trim() || '';
+    if (tag === 'H1' && text) {
+      blocks.push({ type: 'h1', content: text });
+      continue;
+    }
+    if (tag === 'H2' && text) {
+      blocks.push({ type: 'h2', content: text });
+      continue;
+    }
+    if (tag === 'H3' && text) {
+      blocks.push({ type: 'h3', content: text });
+      continue;
+    }
+    if (tag === 'P' && text) {
+      blocks.push({ type: 'p', content: text });
+      continue;
+    }
+    const imageNode = (() => {
+      if (tag === 'IMG') return node;
+      if (node instanceof Element && node.classList.contains('preview-image-card')) {
+        return node.querySelector('img');
+      }
+      return null;
+    })();
+    if (!(imageNode instanceof HTMLImageElement)) continue;
+    const src = normalizePreviewUrl(imageNode.getAttribute('src') || imageNode.src || imageNode.currentSrc || '');
+    if (!src) continue;
+    blocks.push({ type: 'img', src });
+  }
+  return blocks;
+}
+
+async function notionRequest(path, { method = 'GET', token, json } = {}) {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Notion-Version': NOTION_VERSION,
+  };
+  const init = { method, headers };
+  if (json !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    init.body = JSON.stringify(json);
+  }
+
+  const response = await fetch(`${NOTION_API_BASE}${path}`, init);
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  if (!response.ok) {
+    const code = payload?.code ? `${payload.code}: ` : '';
+    const message = payload?.message || `HTTP ${response.status}`;
+    throw new Error(`${code}${message}`);
+  }
+  return payload;
+}
+
+async function notionUploadImage(blob, filename, token) {
+  const createPayload = await notionRequest('/file_uploads', {
+    method: 'POST',
+    token,
+    json: {
+      filename,
+      content_type: blob.type || 'application/octet-stream',
+      mode: 'single_part',
+    },
+  });
+  const uploadId = createPayload?.id;
+  if (!uploadId) {
+    throw new Error('Notion file upload id missing');
+  }
+
+  const form = new FormData();
+  form.append('file', blob, filename);
+  const sendRes = await fetch(`${NOTION_API_BASE}/file_uploads/${uploadId}/send`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Notion-Version': NOTION_VERSION,
+    },
+    body: form,
+  });
+  let sendPayload = null;
+  try {
+    sendPayload = await sendRes.json();
+  } catch {
+    sendPayload = null;
+  }
+  if (!sendRes.ok) {
+    const code = sendPayload?.code ? `${sendPayload.code}: ` : '';
+    const message = sendPayload?.message || `HTTP ${sendRes.status}`;
+    throw new Error(`${code}${message}`);
+  }
+
+  const status = sendPayload?.status || '';
+  if (status !== 'uploaded') {
+    await notionRequest(`/file_uploads/${uploadId}/complete`, {
+      method: 'POST',
+      token,
+      json: {},
+    });
+  }
+  return uploadId;
+}
+
+async function verifyNotionConnection(token) {
+  const me = await notionRequest('/users/me', {
+    method: 'GET',
+    token,
+  });
+  const userName = me?.name || me?.bot?.owner?.user?.name || me?.type || '当前集成';
+  return { userName };
+}
+
+async function discoverWritableNotionPages(token) {
+  const pages = [];
+  let cursor = '';
+  for (let i = 0; i < 3; i += 1) {
+    const payload = await notionRequest('/search', {
+      method: 'POST',
+      token,
+      json: {
+        query: '',
+        filter: {
+          property: 'object',
+          value: 'page',
+        },
+        sort: {
+          direction: 'descending',
+          timestamp: 'last_edited_time',
+        },
+        page_size: 50,
+        ...(cursor ? { start_cursor: cursor } : {}),
+      },
+    });
+    const results = Array.isArray(payload?.results) ? payload.results : [];
+    for (const page of results) {
+      const id = toNotionUuid(page?.id);
+      if (!id) continue;
+      const title = notionPageTitleFromObject(page) || `Untitled (${id.slice(0, 8)})`;
+      pages.push({
+        id,
+        title,
+        url: typeof page?.url === 'string' ? page.url : '',
+      });
+    }
+    if (!payload?.has_more || !payload?.next_cursor) break;
+    cursor = payload.next_cursor;
+  }
+
+  const uniq = [];
+  const seen = new Set();
+  pages.forEach(page => {
+    if (seen.has(page.id)) return;
+    seen.add(page.id);
+    uniq.push(page);
+  });
+  return uniq;
+}
+
+function chunkArray(input, size) {
+  const chunks = [];
+  for (let i = 0; i < input.length; i += size) {
+    chunks.push(input.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function mapWithConcurrency(items, concurrency, worker) {
+  const limit = Math.max(1, Number(concurrency) || 1);
+  const input = Array.isArray(items) ? items : [];
+  if (!input.length) return [];
+
+  const results = new Array(input.length);
+  let nextIndex = 0;
+
+  async function runOne() {
+    while (nextIndex < input.length) {
+      const cur = nextIndex;
+      nextIndex += 1;
+      results[cur] = await worker(input[cur], cur);
+    }
+  }
+
+  const runners = [];
+  const runnerCount = Math.min(limit, input.length);
+  for (let i = 0; i < runnerCount; i += 1) {
+    runners.push(runOne());
+  }
+  await Promise.all(runners);
+  return results;
 }
 
 function crc32(bytes) {
@@ -563,22 +898,23 @@ async function localizePreviewImagesForWechat() {
   const images = Array.from(preview.querySelectorAll('img'));
   if (!images.length) return { total: 0, localized: 0 };
 
-  let localized = 0;
-  for (const image of images) {
+  const outputs = await mapWithConcurrency(images, 4, async image => {
     const src = normalizeHttpUrl(image.getAttribute('src') || image.src || '');
-    if (!src) continue;
+    if (!src) return 0;
     try {
       const blob = await fetchImageBlob(src);
       const dataUrl = await blobToDataUrl(blob);
-      if (!dataUrl) continue;
+      if (!dataUrl) return 0;
       image.dataset.remoteSrc = src;
       image.src = dataUrl;
-      localized += 1;
+      return 1;
     } catch (err) {
       console.warn('Localize preview image failed:', err);
+      return 0;
     }
-  }
+  });
 
+  const localized = outputs.reduce((sum, value) => sum + (Number(value) || 0), 0);
   return { total: images.length, localized };
 }
 
@@ -666,6 +1002,131 @@ async function buildNotionExportZipBlob() {
 
   files.push({ name: 'article.md', data: encodeText(markdown), date: new Date() });
   return createZipBlob(files);
+}
+
+async function clipPreviewToNotion() {
+  const notionToken = state.notionToken || notionTokenInput?.value?.trim() || '';
+  const parentRaw = state.notionParentPageId || notionParentPageInput?.value?.trim() || '';
+  const parentPageId = toNotionUuid(parentRaw);
+  if (!notionToken) {
+    throw new Error('请先填写并保存 Notion Integration Token');
+  }
+  if (!parentPageId) {
+    throw new Error('Parent Page ID / URL 无效');
+  }
+
+  const blocks = collectPreviewBlocks();
+  if (!blocks.length) {
+    throw new Error('当前没有可发送内容');
+  }
+
+  const tab = await getActiveTab();
+  const titleFromBlocks = blocks.find(item => item.type === 'h1')?.content || '';
+  const pageTitle = sanitizeFilename(titleFromBlocks || tab?.title || '剪藏文章', '剪藏文章').slice(0, 90);
+
+  let created = null;
+  try {
+    created = await notionRequest('/pages', {
+      method: 'POST',
+      token: notionToken,
+      json: {
+        parent: {
+          type: 'page_id',
+          page_id: parentPageId,
+        },
+        properties: {
+          title: {
+            title: [
+              {
+                text: {
+                  content: pageTitle,
+                },
+              },
+            ],
+          },
+        },
+        children: [],
+      },
+    });
+  } catch (err) {
+    console.warn('Create page via /pages failed, fallback to child_page block:', err);
+    const appended = await notionRequest(`/blocks/${parentPageId}/children`, {
+      method: 'PATCH',
+      token: notionToken,
+      json: {
+        children: [
+          {
+            object: 'block',
+            type: 'child_page',
+            child_page: {
+              title: pageTitle,
+            },
+          },
+        ],
+      },
+    });
+    created = appended?.results?.[0] || null;
+  }
+
+  const pageId = created?.id;
+  if (!pageId) {
+    throw new Error('创建 Notion 页面失败：未返回页面 ID');
+  }
+
+  const totalImages = blocks.filter(item => item.type === 'img').length;
+  let finishedImages = 0;
+  let imageCount = 0;
+  const mappedChildren = await mapWithConcurrency(blocks, 3, async (block, index) => {
+    if (block.type !== 'img') {
+      return textBlockToNotion(block.type, block.content);
+    }
+    try {
+      const blob = await fetchImageBlob(block.src);
+      const ext = getImageExt(blob, block.src);
+      const uploadId = await notionUploadImage(blob, `image-${String(index + 1).padStart(3, '0')}.${ext}`, notionToken);
+      imageCount += 1;
+      finishedImages += 1;
+      setStatusChip(`状态：发送 Notion 中（图片 ${finishedImages}/${totalImages}）`, 'running');
+      return [
+        {
+          object: 'block',
+          type: 'image',
+          image: {
+            type: 'file_upload',
+            file_upload: {
+              id: uploadId,
+            },
+          },
+        },
+      ];
+    } catch (err) {
+      finishedImages += 1;
+      setStatusChip(`状态：发送 Notion 中（图片 ${finishedImages}/${totalImages}）`, 'running');
+      console.warn('Upload image to Notion failed:', err);
+      return textBlockToNotion('p', `[图片上传失败] ${block.src}`);
+    }
+  });
+  const notionChildren = mappedChildren.flat();
+
+  if (!notionChildren.length) {
+    throw new Error('没有可写入 Notion 的块');
+  }
+
+  const batches = chunkArray(notionChildren, 90);
+  for (const children of batches) {
+    await notionRequest(`/blocks/${pageId}/children`, {
+      method: 'PATCH',
+      token: notionToken,
+      json: { children },
+    });
+  }
+
+  return {
+    pageId,
+    pageUrl: created?.url || '',
+    imageCount,
+    blockCount: notionChildren.length,
+  };
 }
 
 async function buildClipboardPayload() {
@@ -926,6 +1387,109 @@ exportNotionBtn?.addEventListener('click', async () => {
   }
 });
 
+saveNotionConfigBtn?.addEventListener('click', async () => {
+  try {
+    await saveNotionConfig();
+    setNotionConfigStatus('已保存 Notion 配置', 'ok');
+  } catch (err) {
+    console.error('Save notion config failed:', err);
+    setStatusChip('状态：Notion配置保存失败', 'error');
+    setNotionConfigStatus('保存失败，请重试', 'error');
+  }
+});
+
+notionVerifyBtn?.addEventListener('click', async () => {
+  const token = notionTokenInput?.value?.trim() || state.notionToken;
+  if (!token) {
+    setNotionConfigStatus('请先填写 Integration Token', 'warn');
+    return;
+  }
+  notionVerifyBtn.disabled = true;
+  try {
+    const info = await verifyNotionConnection(token);
+    state.notionToken = token;
+    setNotionConfigStatus(`连接成功：${info.userName}`, 'ok');
+    setStatusChip('状态：Notion已连接', 'ok');
+  } catch (err) {
+    const message = typeof err?.message === 'string' ? err.message : '验证失败';
+    setNotionConfigStatus(`连接失败：${message}`, 'error');
+    setStatusChip('状态：Notion连接失败', 'error');
+  } finally {
+    notionVerifyBtn.disabled = false;
+  }
+});
+
+notionDiscoverPagesBtn?.addEventListener('click', async () => {
+  const token = notionTokenInput?.value?.trim() || state.notionToken;
+  if (!token) {
+    setNotionConfigStatus('请先填写 Integration Token', 'warn');
+    return;
+  }
+  notionDiscoverPagesBtn.disabled = true;
+  setNotionConfigStatus('正在拉取可写页面...', 'warn');
+  try {
+    const pages = await discoverWritableNotionPages(token);
+    state.notionToken = token;
+    state.notionPageCandidates = pages;
+    applyNotionPageCandidates(pages);
+    if (pages.length) {
+      setNotionConfigStatus(`发现 ${pages.length} 个可写页面，请选择一个`, 'ok');
+      setStatusChip('状态：可选页面已加载', 'ok');
+    } else {
+      setNotionConfigStatus('未发现可写页面，请先在 Notion 中 Add connections', 'warn');
+      setStatusChip('状态：未发现可写页面', 'warn');
+    }
+  } catch (err) {
+    const message = typeof err?.message === 'string' ? err.message : '拉取失败';
+    setNotionConfigStatus(`自动发现失败：${message}`, 'error');
+    setStatusChip('状态：页面发现失败', 'error');
+  } finally {
+    notionDiscoverPagesBtn.disabled = false;
+  }
+});
+
+notionPageSelect?.addEventListener('change', () => {
+  const selectedId = notionPageSelect.value || '';
+  if (!selectedId) return;
+  const selectedPage = state.notionPageCandidates.find(page => page.id === selectedId) || null;
+  state.notionParentPageId = selectedId;
+  if (notionParentPageInput) notionParentPageInput.value = selectedId;
+  if (selectedPage) {
+    setNotionConfigStatus(`已选择：${selectedPage.title}`, 'ok');
+  } else {
+    setNotionConfigStatus('已填充 Parent Page', 'ok');
+  }
+});
+
+clipToNotionBtn?.addEventListener('click', async () => {
+  const original = clipToNotionBtn.innerHTML;
+  clipToNotionBtn.disabled = true;
+  setIconOnlyBtn(clipToNotionBtn, 'send', '发送中...');
+  setStatusChip('状态：发送 Notion 中', 'running');
+  try {
+    const result = await clipPreviewToNotion();
+    setIconOnlyBtn(clipToNotionBtn, 'check', '已发送');
+    setStatusChip(`状态：Notion 已写入（${result.imageCount} 图）`, 'ok');
+    if (statusChip) statusChip.title = '';
+    if (result.pageUrl) {
+      chrome.tabs.create({ url: result.pageUrl }).catch(err => {
+        console.warn('Open notion page failed:', err);
+      });
+    }
+  } catch (err) {
+    console.error('Clip to notion failed:', err);
+    const message = typeof err?.message === 'string' ? err.message : '发送失败';
+    setIconOnlyBtn(clipToNotionBtn, 'circleX', '发送失败');
+    setStatusChip('状态：Notion 发送失败', 'error');
+    if (statusChip) statusChip.title = message;
+  } finally {
+    setTimeout(() => {
+      clipToNotionBtn.innerHTML = original;
+    }, 1800);
+    clipToNotionBtn.disabled = false;
+  }
+});
+
 saveRulesBtn?.addEventListener('click', saveRulesFromInput);
 resetRulesBtn?.addEventListener('click', resetRules);
 copyRulesBtn?.addEventListener('click', copyRulesJson);
@@ -941,6 +1505,7 @@ debugMockBtn?.addEventListener('click', () => {
 setBtn(grabBtn, 'zap', '开始净化');
 setBtn(copyBtn, 'copy', '复制 Markdown');
 setIconOnlyBtn(exportNotionBtn, 'download', '导出 Notion 包');
+setIconOnlyBtn(clipToNotionBtn, 'send', '发送到 Notion');
 setIconOnlyBtn(debugMockBtn, 'flaskConical', '调试模式');
 
 loadSettings().catch(err => {

@@ -1,6 +1,8 @@
 export const STORAGE_KEYS = {
   siteRules: 'siteRules',
   debugMode: 'debugMode',
+  notionToken: 'notionToken',
+  notionParentPageId: 'notionParentPageId',
 };
 
 export const DEFAULT_SITE_RULES = [
