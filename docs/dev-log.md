@@ -368,3 +368,169 @@ Notes:
   - `docs/dev-log.md`
 - Notes:
   - 保留“并发上传”优化，不再启用“正文先写、图片后台追加”模式，避免图文乱序。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 优化抓取体验，修复小报童代码块漏抓与 Notion 标题重复。
+- Changes:
+  - 更新 `extractor.js`：小报童规则新增 `li`/`blockquote`/`pre` 提取，新增 `pre > code` 优先文本提取
+  - 更新 `rules.js`：同步小报童默认规则，支持代码块与更多文本块
+  - 更新 `sidepanel.js`：Notion 发送时跳过与页面标题重复的首个 `h1`，避免重复标题
+  - 更新协作文档 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `extractor.js`
+  - `rules.js`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 未引入新依赖；建议下一步补充 `extractor.js` 的回归测试样例覆盖该场景。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 代码块体验优化，打通预览样式与 Notion code block 写入。
+- Changes:
+  - 更新 `extractor.js`：`pre` 抽取改为输出 `type=code`，并识别可选语言
+  - 更新 `sidepanel.html`：新增代码块样式（等宽字体/背景/语言标签/横向滚动）
+  - 更新 `sidepanel.js`：预览渲染支持 `code`，收集/导出/复制链路支持代码块
+  - 更新 `sidepanel.js`：发送 Notion 时将代码映射为 `code` block，并做语言白名单与兜底
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `extractor.js`
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 未引入新依赖；建议后续补充回归样例覆盖 `language-asciidoc` 等语言映射。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 调整预览代码块横向滚动条尺寸为 4px。
+- Changes:
+  - 更新 `sidepanel.html`：`.preview-code::-webkit-scrollbar` 高度调整为 `4px`
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 仅样式微调，不影响抓取与 Notion 写入逻辑。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 预览代码块取消横向滚动，改为自动换行。
+- Changes:
+  - 更新 `sidepanel.html`：`.preview-code` 调整为 `white-space: pre-wrap` + `overflow-wrap: anywhere` + `overflow-x: hidden`
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 该改动仅影响预览显示，不影响 Notion 发送结构。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 增加文本链接保留能力（预览与 Notion 同步）。
+- Changes:
+  - 更新 `extractor.js`：文本块新增 `segments` 输出（普通文本 + 链接片段）
+  - 更新 `sidepanel.js`：预览渲染支持可点击链接；Notion 发送时写入 `rich_text.link`
+  - 更新 `sidepanel.js`：复制/导出链路保留 Markdown/HTML 链接
+  - 更新 `sidepanel.html`：新增预览链接样式
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `extractor.js`
+  - `sidepanel.js`
+  - `sidepanel.html`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 当前仅覆盖行内超链接（`a[href]`），复杂富文本样式后续可再扩展。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 增加列表标记符号保留（无序/有序/字母/罗马序号）。
+- Changes:
+  - 更新 `extractor.js`：对 `li` 自动补齐列表前缀（`•`、`1.`、`a.`、`i.` 等）
+  - 更新 `extractor.js`：列表项去重改为按“带标记文本”判断，避免同文案条目被误去重
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `extractor.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 列表被提取为扁平文本时仍保留阅读顺序和层次提示。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 修复列表重复抓取，并改为 Notion 原生列表块写入。
+- Changes:
+  - 更新 `extractor.js`：列表项输出独立 `li` 类型与列表元信息（`listType`/`marker`）
+  - 更新 `extractor.js`：跳过 `li` 内嵌文本节点（如 `li > p`），避免重复抓取
+  - 更新 `sidepanel.js`：发送 Notion 时将 `li` 映射为 `bulleted_list_item`/`numbered_list_item`
+  - 更新 `sidepanel.js`：预览/复制/导出链路支持 `li`，不再仅依赖“• 文本”段落
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `extractor.js`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 该修复同时解决“列表变纯符号段落”和“列表文本重复”两个问题。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 新增最小手动回归案例文档，覆盖近期优化点。
+- Changes:
+  - 新增 `docs/regression-cases.md`（代码块、列表去重、链接保留、Notion 列表映射、标题去重、通用回归）
+  - 更新 `docs/ai-context.md`：下一会话建议引用回归案例文档
+  - 更新 `docs/architecture.md`：补充回归案例文档索引
+  - 更新 `docs/todo.md`：登记“最小手动回归案例文档”完成项
+- Files Modified:
+  - `docs/regression-cases.md`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 当前为手动回归基线，后续可逐步演进为自动化测试。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 建立最小自动回归测试（extractor + Notion 映射）。
+- Changes:
+  - 新增 `package.json` / `package-lock.json` 与 `jsdom` 测试依赖
+  - 新增 `notion-blocks.js`，抽取 Notion 映射纯函数并在 `sidepanel.js` 复用
+  - 新增 `tests/run-regression.mjs` 与 fixtures（小报童、公众号、通用回退）
+  - 新增自动回归命令：`npm run test:regression`
+  - 更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `package.json`
+  - `package-lock.json`
+  - `notion-blocks.js`
+  - `sidepanel.js`
+  - `tests/run-regression.mjs`
+  - `tests/fixtures/xiaobot-code-list-link.html`
+  - `tests/fixtures/wechat-basic.html`
+  - `tests/fixtures/fallback-generic.html`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 当前自动回归已通过：4 个 case（extractor 3 + Notion 映射 1）。

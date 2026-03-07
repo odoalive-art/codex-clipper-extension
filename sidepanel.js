@@ -1,6 +1,14 @@
 import { extractPageContent } from './extractor.js';
 import { renderIcon } from './icons.js';
 import { STORAGE_KEYS, getDefaultRules, normalizeRules, ruleHostText } from './rules.js';
+import {
+  codeBlockToNotion,
+  listBlockToNotion,
+  normalizeCodeLanguage,
+  normalizeInlineSegments,
+  normalizeLinkUrl,
+  textBlockToNotion,
+} from './notion-blocks.js';
 
 const grabBtn = document.getElementById('grabBtn');
 const copyBtn = document.getElementById('copyBtn');
@@ -38,6 +46,7 @@ const state = {
   notionToken: '',
   notionParentPageId: '',
   notionPageCandidates: [],
+  previewBlocks: [],
 };
 
 function createPlaceholderImageDataUrl(title, toneA, toneB) {
@@ -147,6 +156,7 @@ function renderStatus(message, kind = '') {
   p.className = `msg${kind ? ` ${kind}` : ''}`;
   p.textContent = message;
   preview.replaceChildren(p);
+  state.previewBlocks = [];
   footer?.classList.remove('has-results');
   if (kind === 'error') setStatusChip('状态：失败', 'error');
   else if (kind === 'warn') setStatusChip('状态：提醒', 'warn');
@@ -264,6 +274,7 @@ function bindTabChangeListeners() {
 
 function renderToPreview(blocks) {
   const frag = document.createDocumentFragment();
+  const renderedBlocks = [];
   blocks.forEach(block => {
     if (!block || typeof block !== 'object') return;
     if (block.type === 'img') {
@@ -284,6 +295,32 @@ function renderToPreview(blocks) {
       card.appendChild(img);
       card.appendChild(copyImageBtn);
       frag.appendChild(card);
+      renderedBlocks.push({ type: 'img', src });
+      return;
+    }
+
+    if (block.type === 'code') {
+      const codeText = typeof block.content === 'string' ? block.content.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '') : '';
+      if (!codeText.trim()) return;
+      const language = normalizeCodeLanguage(block.language);
+      const card = document.createElement('div');
+      card.className = 'preview-code-card';
+      card.dataset.blockType = 'code';
+      card.dataset.codeLanguage = language;
+      const langBadge = document.createElement('span');
+      langBadge.className = 'preview-code-lang';
+      langBadge.textContent = language;
+      const pre = document.createElement('pre');
+      pre.className = 'preview-code';
+      pre.dataset.blockType = 'code';
+      pre.dataset.codeLanguage = language;
+      const code = document.createElement('code');
+      code.textContent = codeText;
+      pre.appendChild(code);
+      card.appendChild(langBadge);
+      card.appendChild(pre);
+      frag.appendChild(card);
+      renderedBlocks.push({ type: 'code', content: codeText, language });
       return;
     }
 
@@ -295,14 +332,48 @@ function renderToPreview(blocks) {
     else if (block.type === 'h2') tagName = 'h2';
     else if (block.type === 'h3') tagName = 'h3';
     else if (block.type === 'p') tagName = 'p';
+    else if (block.type === 'li') tagName = 'p';
     if (!tagName) return;
 
     const el = document.createElement(tagName);
-    el.textContent = text;
+    if (block.type === 'li') {
+      el.classList.add('preview-list-item');
+      const marker = typeof block.marker === 'string' && block.marker.trim() ? block.marker.trim() : block.listType === 'numbered' ? '1.' : '•';
+      el.appendChild(document.createTextNode(`${marker} `));
+    }
+    const segments = normalizeInlineSegments(text, block.segments);
+    if (segments.length) {
+      segments.forEach(segment => {
+        if (segment.type === 'link') {
+          const anchor = document.createElement('a');
+          anchor.href = segment.href;
+          anchor.target = '_blank';
+          anchor.rel = 'noopener noreferrer nofollow';
+          anchor.textContent = segment.text;
+          el.appendChild(anchor);
+        } else {
+          el.appendChild(document.createTextNode(segment.text));
+        }
+      });
+    } else {
+      el.textContent = text;
+    }
     frag.appendChild(el);
+    renderedBlocks.push({
+      type: block.type,
+      content: text,
+      ...(block.type === 'li'
+        ? {
+            listType: block.listType === 'numbered' ? 'numbered' : 'bulleted',
+            marker: typeof block.marker === 'string' ? block.marker : '',
+          }
+        : {}),
+      ...(segments.length ? { segments } : {}),
+    });
   });
 
   preview.replaceChildren(frag);
+  state.previewBlocks = renderedBlocks;
   if (!preview.children.length) {
     setCountChip(0);
     renderStatus('未能提取到有效内容', 'warn');
@@ -511,52 +582,13 @@ function toNotionUuid(raw) {
   return `${source.slice(0, 8)}-${source.slice(8, 12)}-${source.slice(12, 16)}-${source.slice(16, 20)}-${source.slice(20, 32)}`;
 }
 
-function splitTextForNotion(raw, chunkSize = 1800) {
-  const text = String(raw || '').trim();
-  if (!text) return [];
-  if (text.length <= chunkSize) return [text];
-
-  const chunks = [];
-  let start = 0;
-  while (start < text.length) {
-    const maxEnd = Math.min(text.length, start + chunkSize);
-    let end = maxEnd;
-    if (maxEnd < text.length) {
-      const breakAt = text.lastIndexOf('\n', maxEnd);
-      if (breakAt > start + Math.floor(chunkSize * 0.45)) {
-        end = breakAt;
-      }
-    }
-    const part = text.slice(start, end).trim();
-    if (part) chunks.push(part);
-    start = end;
-  }
-  return chunks;
-}
-
-function textBlockToNotion(blockType, content) {
-  const parts = splitTextForNotion(content);
-  if (!parts.length) return [];
-  const blockName =
-    blockType === 'h1' ? 'heading_1' : blockType === 'h2' ? 'heading_2' : blockType === 'h3' ? 'heading_3' : 'paragraph';
-
-  return parts.map(part => ({
-    object: 'block',
-    type: blockName,
-    [blockName]: {
-      rich_text: [
-        {
-          type: 'text',
-          text: {
-            content: part,
-          },
-        },
-      ],
-    },
-  }));
-}
-
 function collectPreviewBlocks() {
+  if (Array.isArray(state.previewBlocks) && state.previewBlocks.length) {
+    return state.previewBlocks.map(block => ({
+      ...block,
+      ...(Array.isArray(block.segments) ? { segments: block.segments.map(item => ({ ...item })) } : {}),
+    }));
+  }
   const blocks = [];
   for (const node of Array.from(preview.childNodes)) {
     const tag = node.nodeName;
@@ -575,6 +607,20 @@ function collectPreviewBlocks() {
     }
     if (tag === 'P' && text) {
       blocks.push({ type: 'p', content: text });
+      continue;
+    }
+    const codeNode = (() => {
+      if (!(node instanceof Element)) return null;
+      if (tag === 'PRE' && node.classList.contains('preview-code')) return node;
+      if (node.classList.contains('preview-code-card')) return node.querySelector('pre.preview-code');
+      return null;
+    })();
+    if (codeNode instanceof Element) {
+      const codeText = codeNode.querySelector('code')?.textContent || codeNode.textContent || '';
+      const normalizedCode = codeText.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
+      if (!normalizedCode.trim()) continue;
+      const language = normalizeCodeLanguage(codeNode.dataset.codeLanguage || node.dataset?.codeLanguage || '');
+      blocks.push({ type: 'code', content: normalizedCode, language });
       continue;
     }
     const imageNode = (() => {
@@ -944,40 +990,59 @@ async function copySinglePreviewImage(imageEl) {
   ]);
 }
 
+function inlineSegmentsToMarkdown(content, segments) {
+  const normalized = normalizeInlineSegments(content, segments);
+  if (!normalized.length) return String(content || '');
+  return normalized
+    .map(item => (item.type === 'link' ? `[${item.text}](${item.href})` : item.text))
+    .join('');
+}
+
+function inlineSegmentsToHtml(content, segments) {
+  const normalized = normalizeInlineSegments(content, segments);
+  if (!normalized.length) return escapeHtml(String(content || ''));
+  return normalized
+    .map(item =>
+      item.type === 'link'
+        ? `<a href="${escapeHtml(item.href)}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(item.text)}</a>`
+        : escapeHtml(item.text)
+    )
+    .join('');
+}
+
 async function buildNotionExportZipBlob() {
   const files = [];
   const markdownLines = [];
   let imageIndex = 0;
 
-  for (const node of Array.from(preview.childNodes)) {
-    const tag = node.nodeName;
-    const text = node.textContent?.trim() || '';
-    if (tag === 'H1' && text) {
-      markdownLines.push(`# ${text}`);
+  const blocks = collectPreviewBlocks();
+  for (const block of blocks) {
+    if (!block || typeof block !== 'object') continue;
+    if ((block.type === 'h1' || block.type === 'h2' || block.type === 'h3' || block.type === 'p') && block.content) {
+      const text = inlineSegmentsToMarkdown(block.content, block.segments);
+      if (!text.trim()) continue;
+      if (block.type === 'h1') markdownLines.push(`# ${text}`);
+      else if (block.type === 'h2') markdownLines.push(`## ${text}`);
+      else if (block.type === 'h3') markdownLines.push(`### ${text}`);
+      else markdownLines.push(text);
       continue;
     }
-    if (tag === 'H2' && text) {
-      markdownLines.push(`## ${text}`);
+    if (block.type === 'li' && block.content) {
+      const text = inlineSegmentsToMarkdown(block.content, block.segments);
+      if (!text.trim()) continue;
+      const marker = block.listType === 'numbered' ? '1.' : '-';
+      markdownLines.push(`${marker} ${text}`);
       continue;
     }
-    if (tag === 'H3' && text) {
-      markdownLines.push(`### ${text}`);
+    if (block.type === 'code') {
+      const normalizedCode = String(block.content || '').replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
+      if (!normalizedCode.trim()) continue;
+      const language = normalizeCodeLanguage(block.language);
+      markdownLines.push(`\`\`\`${language === 'plain text' ? '' : language}\n${normalizedCode}\n\`\`\``);
       continue;
     }
-    if (tag === 'P' && text) {
-      markdownLines.push(text);
-      continue;
-    }
-    const imageNode = (() => {
-      if (tag === 'IMG') return node;
-      if (node instanceof Element && node.classList.contains('preview-image-card')) {
-        return node.querySelector('img');
-      }
-      return null;
-    })();
-    if (!(imageNode instanceof HTMLImageElement)) continue;
-
-    const src = imageNode.currentSrc || imageNode.src || imageNode.getAttribute('src') || '';
+    if (block.type !== 'img') continue;
+    const src = normalizePreviewUrl(block.src || '');
     if (!src) continue;
     try {
       const response = await fetch(src, { credentials: 'include', cache: 'force-cache' });
@@ -1023,6 +1088,13 @@ async function clipPreviewToNotion() {
   const tab = await getActiveTab();
   const titleFromBlocks = blocks.find(item => item.type === 'h1')?.content || '';
   const pageTitle = sanitizeFilename(titleFromBlocks || tab?.title || '剪藏文章', '剪藏文章').slice(0, 90);
+  const blocksForChildren = (() => {
+    const firstIndex = blocks.findIndex(item => item?.type === 'h1' && item?.content?.trim());
+    if (firstIndex < 0) return blocks;
+    const firstTitle = blocks[firstIndex].content.trim();
+    if (!firstTitle || firstTitle !== titleFromBlocks.trim()) return blocks;
+    return blocks.filter((_, idx) => idx !== firstIndex);
+  })();
 
   let created = null;
   try {
@@ -1073,12 +1145,18 @@ async function clipPreviewToNotion() {
     throw new Error('创建 Notion 页面失败：未返回页面 ID');
   }
 
-  const totalImages = blocks.filter(item => item.type === 'img').length;
+  const totalImages = blocksForChildren.filter(item => item.type === 'img').length;
   let finishedImages = 0;
   let imageCount = 0;
-  const mappedChildren = await mapWithConcurrency(blocks, 3, async (block, index) => {
+  const mappedChildren = await mapWithConcurrency(blocksForChildren, 3, async (block, index) => {
     if (block.type !== 'img') {
-      return textBlockToNotion(block.type, block.content);
+      if (block.type === 'code') {
+        return codeBlockToNotion(block.content, block.language);
+      }
+      if (block.type === 'li') {
+        return listBlockToNotion(block.content, block.segments, block.listType);
+      }
+      return textBlockToNotion(block.type, block.content, block.segments);
     }
     try {
       const blob = await fetchImageBlob(block.src);
@@ -1109,7 +1187,12 @@ async function clipPreviewToNotion() {
   const notionChildren = mappedChildren.flat();
 
   if (!notionChildren.length) {
-    throw new Error('没有可写入 Notion 的块');
+    return {
+      pageId,
+      pageUrl: created?.url || '',
+      imageCount: 0,
+      blockCount: 0,
+    };
   }
 
   const batches = chunkArray(notionChildren, 90);
@@ -1144,55 +1227,64 @@ async function buildClipboardPayload() {
   const htmlLines = [];
   const imageBlobs = [];
   let inlinedWechatImageCount = 0;
+  const blocks = collectPreviewBlocks();
+  for (const block of blocks) {
+    if (!block || typeof block !== 'object') continue;
+    if ((block.type === 'h1' || block.type === 'h2' || block.type === 'h3' || block.type === 'p') && block.content) {
+      const mdText = inlineSegmentsToMarkdown(block.content, block.segments);
+      const htmlText = inlineSegmentsToHtml(block.content, block.segments);
+      if (!mdText.trim()) continue;
+      if (block.type === 'h1') {
+        markdownLines.push(`# ${mdText}`);
+        htmlLines.push(`<h1>${htmlText}</h1>`);
+      } else if (block.type === 'h2') {
+        markdownLines.push(`## ${mdText}`);
+        htmlLines.push(`<h2>${htmlText}</h2>`);
+      } else if (block.type === 'h3') {
+        markdownLines.push(`### ${mdText}`);
+        htmlLines.push(`<h3>${htmlText}</h3>`);
+      } else {
+        markdownLines.push(mdText);
+        htmlLines.push(`<p>${htmlText}</p>`);
+      }
+      continue;
+    }
+    if (block.type === 'li' && block.content) {
+      const mdText = inlineSegmentsToMarkdown(block.content, block.segments);
+      const htmlText = inlineSegmentsToHtml(block.content, block.segments);
+      if (!mdText.trim()) continue;
+      const marker = block.listType === 'numbered' ? '1.' : '-';
+      markdownLines.push(`${marker} ${mdText}`);
+      htmlLines.push(`<p>${escapeHtml(marker)} ${htmlText}</p>`);
+      continue;
+    }
 
-  for (const node of Array.from(preview.childNodes)) {
-    const tag = node.nodeName;
-    const text = node.textContent?.trim() || '';
-    if (tag === 'H1' && text) {
-      markdownLines.push(`# ${text}`);
-      htmlLines.push(`<h1>${escapeHtml(text)}</h1>`);
+    if (block.type === 'code') {
+      const normalizedCode = String(block.content || '').replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
+      if (!normalizedCode.trim()) continue;
+      const language = normalizeCodeLanguage(block.language);
+      markdownLines.push(`\`\`\`${language === 'plain text' ? '' : language}\n${normalizedCode}\n\`\`\``);
+      htmlLines.push(`<pre data-language="${escapeHtml(language)}"><code>${escapeHtml(normalizedCode)}</code></pre>`);
       continue;
     }
-    if (tag === 'H2' && text) {
-      markdownLines.push(`## ${text}`);
-      htmlLines.push(`<h2>${escapeHtml(text)}</h2>`);
-      continue;
-    }
-    if (tag === 'H3' && text) {
-      markdownLines.push(`### ${text}`);
-      htmlLines.push(`<h3>${escapeHtml(text)}</h3>`);
-      continue;
-    }
-    if (tag === 'P' && text) {
-      markdownLines.push(text);
-      htmlLines.push(`<p>${escapeHtml(text)}</p>`);
-      continue;
-    }
-    const imageNode = (() => {
-      if (tag === 'IMG') return node;
-      if (node instanceof Element && node.classList.contains('preview-image-card')) {
-        return node.querySelector('img');
+
+    if (block.type !== 'img') continue;
+    const src = normalizePreviewUrl(block.src || '');
+    if (!src) continue;
+    markdownLines.push(`![](${src})`);
+    let htmlSrc = src;
+    if (shouldInlineWechatImages) {
+      try {
+        const blob = await fetchImageBlob(src);
+        htmlSrc = await blobToDataUrl(blob);
+        imageBlobs.push(blob);
+        inlinedWechatImageCount += 1;
+      } catch (err) {
+        console.warn('Inline wechat image failed, fallback to remote src:', err);
+        htmlSrc = src;
       }
-      return null;
-    })();
-    if (imageNode instanceof HTMLImageElement) {
-      const src = normalizePreviewUrl(imageNode.getAttribute('src') || imageNode.src || '');
-      if (!src) continue;
-      markdownLines.push(`![](${src})`);
-      let htmlSrc = src;
-      if (shouldInlineWechatImages) {
-        try {
-          const blob = await fetchImageBlob(src);
-          htmlSrc = await blobToDataUrl(blob);
-          imageBlobs.push(blob);
-          inlinedWechatImageCount += 1;
-        } catch (err) {
-          console.warn('Inline wechat image failed, fallback to remote src:', err);
-          htmlSrc = src;
-        }
-      }
-      htmlLines.push(`<p><img src="${escapeHtml(htmlSrc)}" alt="" /></p>`);
     }
+    htmlLines.push(`<p><img src="${escapeHtml(htmlSrc)}" alt="" /></p>`);
   }
 
   return {

@@ -15,7 +15,7 @@ export const DEFAULT_SITE_RULES = [
     },
     rootSelectors: ['.paper-content', '.post-content', 'article', 'main'],
     titleSelectors: ['h1'],
-    contentSelectors: ['h1', 'h2', 'h3', 'p', 'img'],
+    contentSelectors: ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img'],
     exclude: {
       ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
       ancestorClassRegex:
@@ -105,7 +105,7 @@ function normalizeRule(rule) {
     match,
     rootSelectors: toStringList(rule.rootSelectors, ['article', 'main', '[role="main"]', 'body']),
     titleSelectors: toStringList(rule.titleSelectors, ['h1']),
-    contentSelectors: toStringList(rule.contentSelectors, ['h1', 'h2', 'h3', 'p', 'img']),
+    contentSelectors: toStringList(rule.contentSelectors, ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img']),
     exclude: {
       ancestorTags: toStringList(rule.exclude?.ancestorTags, ['NAV', 'HEADER', 'FOOTER', 'ASIDE']),
       ancestorClassRegex:

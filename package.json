@@ -1,0 +1,28 @@
+{
+  "name": "clipper-studio-codex",
+  "version": "1.0.0",
+  "description": "## Overview Briefly describe the project purpose and intended users.",
+  "type": "module",
+  "main": "background.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "npm run test:regression",
+    "test:regression": "node tests/run-regression.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/odoalive-art/codex-clipper-extension.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/odoalive-art/codex-clipper-extension/issues"
+  },
+  "homepage": "https://github.com/odoalive-art/codex-clipper-extension#readme",
+  "devDependencies": {
+    "jsdom": "^27.0.1"
+  }
+}

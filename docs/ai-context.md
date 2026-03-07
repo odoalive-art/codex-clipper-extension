@@ -31,13 +31,21 @@ development (direct clip to Notion landed; next focus is Notion reliability and 
 - 抓取前会拦截 `chrome://` 等不可注入页面，提示切换到普通网页（http/https）
 - 新增悬浮 `调试模式` 按钮，可注入虚拟标题、正文与占位图，便于在任意页面调试 UI
 - Side Panel 交互图标已统一到本地 `icons.js` 的 Lucide 风格 SVG 集合，避免混用零散图标
+- 小报童规则已补充代码块提取（`pre`）与列表/引用提取，避免代码段漏抓
+- Notion 直连已避免标题重复写入（页面标题与正文首个 `h1` 去重）
+- 预览区已支持代码块样式渲染（等宽字体/背景/自动换行/语言标签）
+- 发送至 Notion 时，代码块会写入 `code` block（自动语言映射，未知语言回退 plain text）
+- 文本内超链接已支持保留：预览可点击，发送 Notion 时写入 `rich_text.link`
+- 列表项已支持标记符号保留（如 `•`、`1.`、`a.`、`i.`），预览与 Notion 保持一致
+- 已修复列表重复抓取（避免 `li` 与其内部 `p` 重复入库），并改为 Notion 原生列表块写入
+- 已新增最小自动回归脚本：`npm run test:regression`（覆盖小报童/公众号/通用回退 + Notion 映射）
 
 ## Development Focus
 
 当前开发重点。
 
 1. 继续处理公众号图片抓取问题（抓取稳定性、图片可用性与后续导入路径）
-2. 完善 Notion 直连流程（错误提示、配置体验、失败重试与批量稳定性）
+2. 完善 Notion 直连流程（错误提示、配置体验、失败重试与批量稳定性；已修复标题重复）
 3. 补充回归测试与样例页面验证流程
 
 ## Next Session
@@ -45,9 +53,9 @@ development (direct clip to Notion landed; next focus is Notion reliability and 
 下一会话建议按以下顺序继续：
 
 1. 先执行 `执行【上下文同步】`，确认当前分支与任务边界
-2. 用真实公众号文章验证 Notion 直连：重点观察图片上传失败率与页面创建权限错误
-3. 优化 Notion 配置引导（如何获取 Parent Page ID、如何连接 Integration）
-4. 开始高优先级任务：为 `extractor.js` 建立最小回归测试样例
+2. 按 `docs/regression-cases.md` 执行最小回归案例（重点 Case 2/3/4/5）
+3. 用真实 Notion 直连验证代码块语言映射、链接、列表标记写入是否符合预期
+4. 下一高优先级：抽取 `extractor.js` 与 `rules.js` 的重复规则定义，避免双份维护
 
 ## Key Files
 
@@ -59,3 +67,4 @@ development (direct clip to Notion landed; next focus is Notion reliability and 
 - `background.js`：配置点击扩展图标时打开 Side Panel
 - `rules.js`：规则默认值、规范化、存储键与规则展示辅助
 - `extractor.js`：核心提取逻辑（节点过滤、图片处理、调试统计、回退规则）
+- `docs/regression-cases.md`：最小手动回归案例（代码块/链接/列表/Notion 映射）

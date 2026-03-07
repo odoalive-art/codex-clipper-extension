@@ -153,6 +153,50 @@
     #preview h2 { font-size: 16px; font-weight: 700; margin: 0 0 10px; color: #000; }
     #preview h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; color: #1c1c1e; }
     #preview p { margin: 0 0 12px; }
+    #preview a {
+      color: #1d4ed8;
+      text-decoration: underline;
+      text-decoration-color: rgba(29, 78, 216, 0.35);
+      text-underline-offset: 2px;
+    }
+    .preview-code-card {
+      position: relative;
+      margin: 10px 0 14px;
+    }
+    .preview-code-lang {
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      font-size: 10px;
+      line-height: 1;
+      color: #64748b;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 999px;
+      padding: 4px 7px;
+      text-transform: lowercase;
+    }
+    .preview-code {
+      margin: 0;
+      padding: 14px 12px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(15, 23, 42, 0.14);
+      background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+      color: #0f172a;
+      overflow-x: hidden;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      tab-size: 2;
+      box-sizing: border-box;
+    }
+    .preview-code code {
+      font: inherit;
+      color: inherit;
+      white-space: inherit;
+    }
     #preview img {
       max-width: 100%;
       border-radius: 0px;

@@ -10,7 +10,7 @@ Briefly describe the project purpose and intended users.
 
 ## Common Commands
 - `command for development`
-- `command for testing`
+- `npm run test:regression`
 - `command for build`
 
 ## Repository Structure

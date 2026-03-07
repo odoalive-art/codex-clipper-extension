@@ -5,6 +5,7 @@ export const SUPPORTED_SITES = [
 
 export async function extractPageContent(options = {}) {
   const SAFE_PROTOCOLS = new Set(['http:', 'https:']);
+  const SAFE_LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
 
   const DEFAULT_RULES = [
     {
@@ -14,7 +15,7 @@ export async function extractPageContent(options = {}) {
       match: { hostSuffix: 'xiaobot.net' },
       rootSelectors: ['.paper-content', '.post-content', 'article', 'main'],
       titleSelectors: ['h1'],
-      contentSelectors: ['h1', 'h2', 'h3', 'p', 'img'],
+      contentSelectors: ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img'],
       exclude: {
         ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
         ancestorClassRegex:
@@ -105,7 +106,7 @@ export async function extractPageContent(options = {}) {
       match,
       rootSelectors: toStringList(rule.rootSelectors, ['article', 'main', '[role="main"]', 'body']),
       titleSelectors: toStringList(rule.titleSelectors, ['h1']),
-      contentSelectors: toStringList(rule.contentSelectors, ['h1', 'h2', 'h3', 'p', 'img']),
+      contentSelectors: toStringList(rule.contentSelectors, ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img']),
       exclude: {
         ancestorTags: toStringList(rule.exclude?.ancestorTags, ['NAV', 'HEADER', 'FOOTER', 'ASIDE']),
         ancestorClassRegex:
@@ -186,6 +187,127 @@ export async function extractPageContent(options = {}) {
     return '';
   }
 
+  function normalizeLinkHref(raw) {
+    if (typeof raw !== 'string' || !raw.trim()) return '';
+    try {
+      const url = new URL(raw, location.href);
+      return SAFE_LINK_PROTOCOLS.has(url.protocol) ? url.href : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function extractInlineSegments(el, fullText) {
+    if (!(el instanceof Element) || !fullText) return [];
+    const anchors = Array.from(el.querySelectorAll('a[href]'));
+    if (!anchors.length) return [];
+
+    const links = anchors
+      .map(anchor => {
+        const text = (anchor.innerText || '').replace(/\s+/g, ' ').trim();
+        const href = normalizeLinkHref(anchor.getAttribute('href') || anchor.href || '');
+        if (!text || !href) return null;
+        return { text, href };
+      })
+      .filter(Boolean);
+    if (!links.length) return [];
+
+    const segments = [];
+    let cursor = 0;
+    for (const link of links) {
+      const hit = fullText.indexOf(link.text, cursor);
+      if (hit < 0) continue;
+      const before = fullText.slice(cursor, hit);
+      if (before) segments.push({ type: 'text', text: before });
+      segments.push({ type: 'link', text: link.text, href: link.href });
+      cursor = hit + link.text.length;
+    }
+    if (cursor < fullText.length) {
+      segments.push({ type: 'text', text: fullText.slice(cursor) });
+    }
+
+    const compact = [];
+    for (const segment of segments) {
+      const text = typeof segment?.text === 'string' ? segment.text : '';
+      if (!text) continue;
+      const prev = compact[compact.length - 1];
+      if (prev && prev.type === segment.type && (segment.type !== 'link' || prev.href === segment.href)) {
+        prev.text += text;
+      } else {
+        compact.push(segment.type === 'link' ? { type: 'link', text, href: segment.href } : { type: 'text', text });
+      }
+    }
+    return compact;
+  }
+
+  function toRoman(num) {
+    const value = Math.max(1, Number(num) || 1);
+    const map = [
+      [1000, 'M'],
+      [900, 'CM'],
+      [500, 'D'],
+      [400, 'CD'],
+      [100, 'C'],
+      [90, 'XC'],
+      [50, 'L'],
+      [40, 'XL'],
+      [10, 'X'],
+      [9, 'IX'],
+      [5, 'V'],
+      [4, 'IV'],
+      [1, 'I'],
+    ];
+    let rest = value;
+    let out = '';
+    map.forEach(([n, s]) => {
+      while (rest >= n) {
+        out += s;
+        rest -= n;
+      }
+    });
+    return out;
+  }
+
+  function toAlpha(index, upper = false) {
+    let n = Math.max(1, Number(index) || 1);
+    let out = '';
+    while (n > 0) {
+      n -= 1;
+      out = String.fromCharCode(97 + (n % 26)) + out;
+      n = Math.floor(n / 26);
+    }
+    return upper ? out.toUpperCase() : out;
+  }
+
+  function listMetaForItem(el) {
+    if (!(el instanceof Element) || el.tagName !== 'LI') return null;
+    const parent = el.parentElement;
+    if (!parent) return null;
+    if (parent.tagName === 'UL') return { marker: '•', listType: 'bulleted' };
+    if (parent.tagName !== 'OL') return null;
+
+    const items = Array.from(parent.children).filter(child => child instanceof Element && child.tagName === 'LI');
+    const idx = items.indexOf(el);
+    const start = Number(parent.getAttribute('start') || '1');
+    const order = (Number.isFinite(start) ? start : 1) + Math.max(0, idx);
+    const rawType = (parent.getAttribute('type') || '').trim();
+    const styleType = window.getComputedStyle(parent).listStyleType || '';
+    const type = rawType || styleType;
+    if (type === 'a' || type === 'lower-alpha' || type === 'lower-latin') {
+      return { marker: `${toAlpha(order, false)}.`, listType: 'numbered' };
+    }
+    if (type === 'A' || type === 'upper-alpha' || type === 'upper-latin') {
+      return { marker: `${toAlpha(order, true)}.`, listType: 'numbered' };
+    }
+    if (type === 'i' || type === 'lower-roman') {
+      return { marker: `${toRoman(order).toLowerCase()}.`, listType: 'numbered' };
+    }
+    if (type === 'I' || type === 'upper-roman') {
+      return { marker: `${toRoman(order)}.`, listType: 'numbered' };
+    }
+    return { marker: `${order}.`, listType: 'numbered' };
+  }
+
   function isNoiseByAncestor(el, rule, classRe) {
     let cur = el;
     while (cur && cur !== document.body) {
@@ -202,7 +324,36 @@ export async function extractPageContent(options = {}) {
     if (tagName === 'H1') return 'h1';
     if (tagName === 'H2') return 'h2';
     if (tagName === 'H3') return 'h3';
+    if (tagName === 'LI') return 'li';
     return 'p';
+  }
+
+  function detectCodeLanguage(el) {
+    if (!(el instanceof Element)) return '';
+    const codeEl = el.tagName === 'CODE' ? el : el.querySelector('code');
+    const classNames = [codeEl?.className, el.className]
+      .filter(value => typeof value === 'string' && value.trim())
+      .join(' ');
+    const match = classNames.match(/(?:^|\s)(?:language|lang)-([a-z0-9_+-]+)\b/i);
+    if (match?.[1]) {
+      return match[1].toLowerCase().replaceAll('_', '-');
+    }
+    const attrLang = codeEl?.getAttribute?.('lang') || el.getAttribute?.('lang') || '';
+    if (typeof attrLang === 'string' && attrLang.trim()) {
+      return attrLang.trim().toLowerCase().replaceAll('_', '-');
+    }
+    return '';
+  }
+
+  function extractTextFromNode(el) {
+    if (!(el instanceof Element)) return '';
+    if (el.tagName === 'PRE') {
+      const codeEl = el.querySelector('code');
+      const codeText = codeEl?.innerText || '';
+      const normalizedCode = codeText.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
+      if (normalizedCode) return normalizedCode;
+    }
+    return el.innerText?.trim() || '';
   }
 
   async function preloadLazyContentIfNeeded(rule, debug) {
@@ -357,7 +508,36 @@ export async function extractPageContent(options = {}) {
         continue;
       }
 
-      const text = el.innerText?.trim() || '';
+      const text = extractTextFromNode(el);
+      if (el.tagName === 'PRE') {
+        if (!text) {
+          debug.counters.skipEmpty += 1;
+          continue;
+        }
+        if (rule.text.dedupe && seenText.has(text)) {
+          debug.counters.skipDuplicateText += 1;
+          continue;
+        }
+        const language = detectCodeLanguage(el);
+        seenText.add(text);
+        totalChars += text.length;
+        blocks.push({
+          type: 'code',
+          content: text,
+          ...(language ? { language } : {}),
+        });
+        debug.counters.kept += 1;
+        continue;
+      }
+
+      if (el.tagName !== 'LI') {
+        const parentLi = el.closest('li');
+        if (parentLi && parentLi !== el) {
+          debug.counters.skipContainerText += 1;
+          continue;
+        }
+      }
+
       if (rule.text.skipIfHasDescendantSelector) {
         let hasDescendant = false;
         try {
@@ -365,7 +545,7 @@ export async function extractPageContent(options = {}) {
         } catch {
           hasDescendant = false;
         }
-        if (hasDescendant) {
+        if (hasDescendant && el.tagName !== 'LI') {
           debug.counters.skipContainerText += 1;
           continue;
         }
@@ -383,14 +563,23 @@ export async function extractPageContent(options = {}) {
         debug.counters.skipNoiseText += 1;
         continue;
       }
-      if (rule.text.dedupe && seenText.has(text)) {
+      const listMeta = listMetaForItem(el);
+      const marker = listMeta?.marker || '';
+      const content = text;
+      if (rule.text.dedupe && seenText.has(content)) {
         debug.counters.skipDuplicateText += 1;
         continue;
       }
-
-      seenText.add(text);
-      totalChars += text.length;
-      blocks.push({ type: mapTagToType(el.tagName), content: text });
+      let segments = extractInlineSegments(el, text);
+      if (!segments.length && content) segments = [{ type: 'text', text: content }];
+      seenText.add(content);
+      totalChars += content.length;
+      blocks.push({
+        type: mapTagToType(el.tagName),
+        content,
+        ...(listMeta ? { listType: listMeta.listType, marker: listMeta.marker } : {}),
+        ...(segments.length ? { segments } : {}),
+      });
       debug.counters.kept += 1;
     }
 
@@ -409,7 +598,7 @@ export async function extractPageContent(options = {}) {
     match: { hostRegex: '.*' },
     rootSelectors: ['article', '[role="main"]', '.article-content', '.post-content', 'main', 'body'],
     titleSelectors: ['h1'],
-    contentSelectors: ['h1', 'h2', 'h3', 'p', 'img'],
+    contentSelectors: ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img'],
   });
 
   const targetRule = activeRule || fallbackRule;
