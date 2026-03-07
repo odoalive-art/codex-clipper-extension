@@ -513,15 +513,22 @@
           <label for="notionParentPageInput">Parent Page ID / URL</label>
           <input id="notionParentPageInput" type="text" placeholder="页面链接或 ID">
         </div>
+        <div class="tool-row stretch">
+          <label for="notionTargetTypeSelect">写入目标类型</label>
+          <select id="notionTargetTypeSelect">
+            <option value="page">页面（创建子页面）</option>
+            <option value="database">数据库（创建记录）</option>
+          </select>
+        </div>
         <div class="tool-row">
           <button id="saveNotionConfigBtn" class="mini-btn">保存 Notion 配置</button>
           <button id="notionVerifyBtn" class="mini-btn">验证连接</button>
-          <button id="notionDiscoverPagesBtn" class="mini-btn">自动发现页面</button>
+          <button id="notionDiscoverPagesBtn" class="mini-btn">自动发现目标</button>
         </div>
         <div class="tool-row stretch">
-          <label for="notionPageSelect">可写页面（选择后自动填充 Parent Page）</label>
+          <label for="notionPageSelect">可写目标（页面/数据库，选择后自动填充上方 ID）</label>
           <select id="notionPageSelect">
-            <option value="">请先点击“自动发现页面”</option>
+            <option value="">请先点击“自动发现目标”</option>
           </select>
         </div>
         <div id="notionConfigStatus" class="inline-status"></div>

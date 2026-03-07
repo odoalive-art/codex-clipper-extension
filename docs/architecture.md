@@ -20,8 +20,10 @@
 - Side Panel Controller (`sidepanel.js`)
   - 管理抓取按钮、复制按钮、规则编辑区域与调试面板
   - 管理导出按钮，生成 Notion 导入包（zip）
-  - 管理 Notion 直连配置（Token、Parent Page），支持连接验证与可写页面自动发现
-  - 调用 Notion API 创建页面/上传图片并写入 block
+  - 管理 Notion 直连配置（Token、写入目标 ID、目标类型），支持连接验证与可写目标（页面/数据库）自动发现
+  - 可写目标列表按当前目标类型过滤展示，并分类型持久化最近一次选中的目标 ID
+  - 启动时从本地缓存恢复可写目标列表与最近选择标题，减少重复选择成本
+  - 调用 Notion API 创建页面/数据库记录、上传图片并写入 block
   - 发送 Notion 时对正文首个 `h1` 与页面标题做去重，避免标题重复
   - 发送 Notion 时支持将代码块写入 `code` block，并做语言映射兜底
   - 预览区代码块采用自动换行展示，取消横向滚动
@@ -64,7 +66,7 @@
 4. `sidepanel.js` 将 blocks 渲染为预览 DOM
 5. 用户可选择复制内容，或逐图复制图片二进制
 6. 用户可导出 `article.md + images/*` 的 zip 包并在 Notion 中 Import
-7. 用户可直接发送到 Notion：创建子页面、写入文本块、上传图片并插入 `image.file_upload` 块
+7. 用户可直接发送到 Notion：按目标类型创建子页面或数据库记录，再写入文本块与 `image.file_upload` 块
 
 ## External Dependencies
 
@@ -77,4 +79,4 @@
   - `http://*/*`
   - `https://*/*`
 - 无第三方 npm 依赖（当前为原生 JS 模块实现）
-- Notion API（`/pages`、`/blocks/{id}/children`、`/file_uploads`）
+- Notion API（`/search`、`/pages`、`/databases/{id}`、`/data_sources/{id}`、`/blocks/{id}/children`、`/file_uploads`）

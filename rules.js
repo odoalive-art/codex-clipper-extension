@@ -3,6 +3,12 @@ export const STORAGE_KEYS = {
   debugMode: 'debugMode',
   notionToken: 'notionToken',
   notionParentPageId: 'notionParentPageId',
+  notionWriteTargetType: 'notionWriteTargetType',
+  notionLastPageId: 'notionLastPageId',
+  notionLastDataSourceId: 'notionLastDataSourceId',
+  notionLastPageTitle: 'notionLastPageTitle',
+  notionLastDataSourceTitle: 'notionLastDataSourceTitle',
+  notionTargetCandidatesCache: 'notionTargetCandidatesCache',
 };
 
 export const DEFAULT_SITE_RULES = [

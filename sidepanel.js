@@ -26,6 +26,7 @@ const exportNotionBtn = document.getElementById('exportNotionBtn');
 const clipToNotionBtn = document.getElementById('clipToNotionBtn');
 const notionTokenInput = document.getElementById('notionTokenInput');
 const notionParentPageInput = document.getElementById('notionParentPageInput');
+const notionTargetTypeSelect = document.getElementById('notionTargetTypeSelect');
 const saveNotionConfigBtn = document.getElementById('saveNotionConfigBtn');
 const notionVerifyBtn = document.getElementById('notionVerifyBtn');
 const notionDiscoverPagesBtn = document.getElementById('notionDiscoverPagesBtn');
@@ -45,7 +46,12 @@ const state = {
   activeHost: '',
   notionToken: '',
   notionParentPageId: '',
-  notionPageCandidates: [],
+  notionWriteTargetType: 'page',
+  notionLastPageId: '',
+  notionLastDataSourceId: '',
+  notionLastPageTitle: '',
+  notionLastDataSourceTitle: '',
+  notionTargetCandidates: [],
   previewBlocks: [],
 };
 
@@ -413,16 +419,55 @@ async function loadSettings() {
     STORAGE_KEYS.debugMode,
     STORAGE_KEYS.notionToken,
     STORAGE_KEYS.notionParentPageId,
+    STORAGE_KEYS.notionWriteTargetType,
+    STORAGE_KEYS.notionLastPageId,
+    STORAGE_KEYS.notionLastDataSourceId,
+    STORAGE_KEYS.notionLastPageTitle,
+    STORAGE_KEYS.notionLastDataSourceTitle,
+    STORAGE_KEYS.notionTargetCandidatesCache,
   ]);
   state.rules = normalizeRules(stored[STORAGE_KEYS.siteRules]);
   state.debugMode = stored[STORAGE_KEYS.debugMode] !== false;
   state.notionToken = typeof stored[STORAGE_KEYS.notionToken] === 'string' ? stored[STORAGE_KEYS.notionToken].trim() : '';
   state.notionParentPageId =
     typeof stored[STORAGE_KEYS.notionParentPageId] === 'string' ? stored[STORAGE_KEYS.notionParentPageId].trim() : '';
+  state.notionWriteTargetType = stored[STORAGE_KEYS.notionWriteTargetType] === 'database' ? 'database' : 'page';
+  state.notionLastPageId =
+    typeof stored[STORAGE_KEYS.notionLastPageId] === 'string' ? stored[STORAGE_KEYS.notionLastPageId].trim() : '';
+  state.notionLastDataSourceId =
+    typeof stored[STORAGE_KEYS.notionLastDataSourceId] === 'string'
+      ? stored[STORAGE_KEYS.notionLastDataSourceId].trim()
+      : '';
+  state.notionLastPageTitle =
+    typeof stored[STORAGE_KEYS.notionLastPageTitle] === 'string' ? stored[STORAGE_KEYS.notionLastPageTitle].trim() : '';
+  state.notionLastDataSourceTitle =
+    typeof stored[STORAGE_KEYS.notionLastDataSourceTitle] === 'string'
+      ? stored[STORAGE_KEYS.notionLastDataSourceTitle].trim()
+      : '';
+  if (state.notionParentPageId) {
+    if (state.notionWriteTargetType === 'database' && !state.notionLastDataSourceId) {
+      state.notionLastDataSourceId = state.notionParentPageId;
+    }
+    if (state.notionWriteTargetType === 'page' && !state.notionLastPageId) {
+      state.notionLastPageId = state.notionParentPageId;
+    }
+  }
   if (debugModeCheckbox) debugModeCheckbox.checked = state.debugMode;
   if (notionTokenInput) notionTokenInput.value = state.notionToken;
   if (notionParentPageInput) notionParentPageInput.value = state.notionParentPageId;
-  applyNotionPageCandidates([]);
+  if (notionTargetTypeSelect) notionTargetTypeSelect.value = state.notionWriteTargetType;
+  const cachedTargets = Array.isArray(stored[STORAGE_KEYS.notionTargetCandidatesCache])
+    ? stored[STORAGE_KEYS.notionTargetCandidatesCache]
+        .map(item => ({
+          type: item?.type === 'database' ? 'database' : item?.type === 'page' ? 'page' : '',
+          id: toNotionUuid(item?.id),
+          title: typeof item?.title === 'string' ? item.title.trim() : '',
+          url: typeof item?.url === 'string' ? item.url : '',
+        }))
+        .filter(item => item.type && item.id)
+    : [];
+  state.notionTargetCandidates = cachedTargets;
+  applyNotionTargetCandidates(state.notionTargetCandidates);
   setNotionConfigStatus('');
   renderRulesJson();
   renderSiteBadges();
@@ -434,11 +479,27 @@ async function loadSettings() {
 async function saveNotionConfig() {
   const notionToken = notionTokenInput?.value?.trim() || '';
   const notionParentPageId = notionParentPageInput?.value?.trim() || '';
+  const notionWriteTargetType = notionTargetTypeSelect?.value === 'database' ? 'database' : 'page';
+  const notionLastPageId = notionWriteTargetType === 'page' ? notionParentPageId : state.notionLastPageId;
+  const notionLastDataSourceId = notionWriteTargetType === 'database' ? notionParentPageId : state.notionLastDataSourceId;
+  const notionLastPageTitle = state.notionLastPageTitle;
+  const notionLastDataSourceTitle = state.notionLastDataSourceTitle;
   state.notionToken = notionToken;
   state.notionParentPageId = notionParentPageId;
+  state.notionWriteTargetType = notionWriteTargetType;
+  state.notionLastPageId = notionLastPageId;
+  state.notionLastDataSourceId = notionLastDataSourceId;
+  state.notionLastPageTitle = notionLastPageTitle;
+  state.notionLastDataSourceTitle = notionLastDataSourceTitle;
   await chrome.storage.local.set({
     [STORAGE_KEYS.notionToken]: notionToken,
     [STORAGE_KEYS.notionParentPageId]: notionParentPageId,
+    [STORAGE_KEYS.notionWriteTargetType]: notionWriteTargetType,
+    [STORAGE_KEYS.notionLastPageId]: notionLastPageId,
+    [STORAGE_KEYS.notionLastDataSourceId]: notionLastDataSourceId,
+    [STORAGE_KEYS.notionLastPageTitle]: notionLastPageTitle,
+    [STORAGE_KEYS.notionLastDataSourceTitle]: notionLastDataSourceTitle,
+    [STORAGE_KEYS.notionTargetCandidatesCache]: state.notionTargetCandidates,
   });
   setStatusChip('状态：Notion配置已保存', 'ok');
 }
@@ -462,23 +523,98 @@ function notionPageTitleFromObject(page) {
   return '';
 }
 
-function applyNotionPageCandidates(pages) {
+function notionDatabaseTitleFromObject(database) {
+  if (!database || typeof database !== 'object') return '';
+  if (Array.isArray(database.title)) {
+    const fromTitle = database.title.map(part => part?.plain_text || '').join('').trim();
+    if (fromTitle) return fromTitle;
+  }
+  if (Array.isArray(database.name)) {
+    const fromName = database.name.map(part => part?.plain_text || '').join('').trim();
+    if (fromName) return fromName;
+  }
+  if (typeof database?.plain_text === 'string' && database.plain_text.trim()) {
+    return database.plain_text.trim();
+  }
+  if (typeof database?.title === 'string' && database.title.trim()) {
+    return database.title.trim();
+  }
+  if (typeof database?.name === 'string' && database.name.trim()) {
+    return database.name.trim();
+  }
+  return '';
+}
+
+function getCurrentNotionTargetType() {
+  return notionTargetTypeSelect?.value === 'database' || state.notionWriteTargetType === 'database' ? 'database' : 'page';
+}
+
+function getLastTargetIdByType(type) {
+  return type === 'database' ? state.notionLastDataSourceId : state.notionLastPageId;
+}
+
+function getLastTargetTitleByType(type) {
+  return type === 'database' ? state.notionLastDataSourceTitle : state.notionLastPageTitle;
+}
+
+function setLastTargetIdByType(type, id) {
+  if (type === 'database') state.notionLastDataSourceId = id;
+  else state.notionLastPageId = id;
+}
+
+function setLastTargetTitleByType(type, title) {
+  if (type === 'database') state.notionLastDataSourceTitle = title;
+  else state.notionLastPageTitle = title;
+}
+
+function persistNotionTargetSelection() {
+  return chrome.storage.local.set({
+    [STORAGE_KEYS.notionParentPageId]: state.notionParentPageId,
+    [STORAGE_KEYS.notionWriteTargetType]: state.notionWriteTargetType,
+    [STORAGE_KEYS.notionLastPageId]: state.notionLastPageId,
+    [STORAGE_KEYS.notionLastDataSourceId]: state.notionLastDataSourceId,
+    [STORAGE_KEYS.notionLastPageTitle]: state.notionLastPageTitle,
+    [STORAGE_KEYS.notionLastDataSourceTitle]: state.notionLastDataSourceTitle,
+    [STORAGE_KEYS.notionTargetCandidatesCache]: state.notionTargetCandidates,
+  });
+}
+
+function applyNotionTargetCandidates(targets) {
   if (!notionPageSelect) return;
-  const selected = toNotionUuid(notionParentPageInput?.value || state.notionParentPageId);
+  const selectedType = getCurrentNotionTargetType();
+  const selectedId = toNotionUuid(notionParentPageInput?.value || state.notionParentPageId || getLastTargetIdByType(selectedType));
+  const selectedValue = selectedId ? `${selectedType}:${selectedId}` : '';
+  const filteredTargets = targets.filter(target => target?.type === selectedType);
+  const hasSelected = selectedValue ? filteredTargets.some(target => `${target.type}:${target.id}` === selectedValue) : false;
+  const lastTitle = getLastTargetTitleByType(selectedType);
+  if (selectedId && !hasSelected) {
+    filteredTargets.unshift({
+      type: selectedType,
+      id: selectedId,
+      title: lastTitle || `最近选择 (${selectedId.slice(0, 8)})`,
+      url: '',
+    });
+  }
   const frag = document.createDocumentFragment();
 
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = pages.length ? '请选择一个可写页面' : '未发现可写页面';
+  placeholder.textContent = filteredTargets.length
+    ? selectedType === 'database'
+      ? '请选择一个可写数据库'
+      : '请选择一个可写页面'
+    : selectedType === 'database'
+      ? '未发现可写数据库'
+      : '未发现可写页面';
   frag.appendChild(placeholder);
 
-  pages.forEach(page => {
+  filteredTargets.forEach(target => {
     const option = document.createElement('option');
-    option.value = page.id;
-    const title = page.title || 'Untitled';
+    option.value = `${target.type}:${target.id}`;
+    const title = target.title || 'Untitled';
     option.textContent = title;
-    option.title = page.url || page.id;
-    if (selected && page.id === selected) option.selected = true;
+    option.title = target.url || target.id;
+    if (selectedValue && option.value === selectedValue) option.selected = true;
     frag.appendChild(option);
   });
 
@@ -721,8 +857,9 @@ async function verifyNotionConnection(token) {
   return { userName };
 }
 
-async function discoverWritableNotionPages(token) {
+async function discoverWritableNotionTargets(token) {
   const pages = [];
+  const databases = [];
   let cursor = '';
   for (let i = 0; i < 3; i += 1) {
     const payload = await notionRequest('/search', {
@@ -762,9 +899,165 @@ async function discoverWritableNotionPages(token) {
   pages.forEach(page => {
     if (seen.has(page.id)) return;
     seen.add(page.id);
-    uniq.push(page);
+    uniq.push({ ...page, type: 'page' });
   });
+
+  cursor = '';
+  for (let i = 0; i < 3; i += 1) {
+    const payload = await notionRequest('/search', {
+      method: 'POST',
+      token,
+      json: {
+        query: '',
+        filter: {
+          property: 'object',
+          value: 'data_source',
+        },
+        sort: {
+          direction: 'descending',
+          timestamp: 'last_edited_time',
+        },
+        page_size: 50,
+        ...(cursor ? { start_cursor: cursor } : {}),
+      },
+    });
+    const results = Array.isArray(payload?.results) ? payload.results : [];
+    for (const database of results) {
+      const id = toNotionUuid(database?.id);
+      if (!id) continue;
+      const title = notionDatabaseTitleFromObject(database) || `Untitled DB (${id.slice(0, 8)})`;
+      databases.push({
+        id,
+        title,
+        url: typeof database?.url === 'string' ? database.url : '',
+      });
+    }
+    if (!payload?.has_more || !payload?.next_cursor) break;
+    cursor = payload.next_cursor;
+  }
+
+  databases.forEach(database => {
+    const key = `database:${database.id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    uniq.push({ ...database, type: 'database' });
+  });
+
   return uniq;
+}
+
+function parseNotionTargetValue(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return { type: '', id: '' };
+  const [typePart, ...rest] = value.split(':');
+  const idPart = rest.join(':');
+  const type = typePart === 'database' ? 'database' : typePart === 'page' ? 'page' : '';
+  const id = toNotionUuid(idPart);
+  if (!type || !id) return { type: '', id: '' };
+  return { type, id };
+}
+
+async function getNotionDatabaseTitlePropertyName(token, databaseId) {
+  const paths = [`/databases/${databaseId}`, `/data_sources/${databaseId}`];
+  for (const path of paths) {
+    try {
+      const payload = await notionRequest(path, {
+        method: 'GET',
+        token,
+      });
+      const properties = payload?.properties && typeof payload.properties === 'object' ? payload.properties : {};
+      for (const [key, value] of Object.entries(properties)) {
+        if (value?.type === 'title') return key;
+      }
+    } catch {
+      // try next endpoint
+    }
+  }
+  return '';
+}
+
+async function createNotionWriteTargetPage({ token, targetType, targetId, pageTitle }) {
+  if (targetType === 'database') {
+    const titlePropertyName = await getNotionDatabaseTitlePropertyName(token, targetId);
+    if (!titlePropertyName) {
+      throw new Error('数据库缺少可写标题字段（title）');
+    }
+    const parentModes = [
+      { type: 'database_id', database_id: targetId },
+      { type: 'data_source_id', data_source_id: targetId },
+    ];
+    let lastError = null;
+    for (const parent of parentModes) {
+      try {
+        return await notionRequest('/pages', {
+          method: 'POST',
+          token,
+          json: {
+            parent,
+            properties: {
+              [titlePropertyName]: {
+                title: [
+                  {
+                    text: {
+                      content: pageTitle,
+                    },
+                  },
+                ],
+              },
+            },
+            children: [],
+          },
+        });
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    if (lastError) throw lastError;
+    throw new Error('写入数据库失败');
+  }
+
+  try {
+    return await notionRequest('/pages', {
+      method: 'POST',
+      token,
+      json: {
+        parent: {
+          type: 'page_id',
+          page_id: targetId,
+        },
+        properties: {
+          title: {
+            title: [
+              {
+                text: {
+                  content: pageTitle,
+                },
+              },
+            ],
+          },
+        },
+        children: [],
+      },
+    });
+  } catch (err) {
+    console.warn('Create page via /pages failed, fallback to child_page block:', err);
+    const appended = await notionRequest(`/blocks/${targetId}/children`, {
+      method: 'PATCH',
+      token,
+      json: {
+        children: [
+          {
+            object: 'block',
+            type: 'child_page',
+            child_page: {
+              title: pageTitle,
+            },
+          },
+        ],
+      },
+    });
+    return appended?.results?.[0] || null;
+  }
 }
 
 function chunkArray(input, size) {
@@ -1071,13 +1364,14 @@ async function buildNotionExportZipBlob() {
 
 async function clipPreviewToNotion() {
   const notionToken = state.notionToken || notionTokenInput?.value?.trim() || '';
-  const parentRaw = state.notionParentPageId || notionParentPageInput?.value?.trim() || '';
-  const parentPageId = toNotionUuid(parentRaw);
+  const targetRaw = state.notionParentPageId || notionParentPageInput?.value?.trim() || '';
+  const targetId = toNotionUuid(targetRaw);
+  const targetType = getCurrentNotionTargetType();
   if (!notionToken) {
     throw new Error('请先填写并保存 Notion Integration Token');
   }
-  if (!parentPageId) {
-    throw new Error('Parent Page ID / URL 无效');
+  if (!targetId) {
+    throw new Error(targetType === 'database' ? 'Database ID / URL 无效' : 'Parent Page ID / URL 无效');
   }
 
   const blocks = collectPreviewBlocks();
@@ -1096,49 +1390,12 @@ async function clipPreviewToNotion() {
     return blocks.filter((_, idx) => idx !== firstIndex);
   })();
 
-  let created = null;
-  try {
-    created = await notionRequest('/pages', {
-      method: 'POST',
-      token: notionToken,
-      json: {
-        parent: {
-          type: 'page_id',
-          page_id: parentPageId,
-        },
-        properties: {
-          title: {
-            title: [
-              {
-                text: {
-                  content: pageTitle,
-                },
-              },
-            ],
-          },
-        },
-        children: [],
-      },
-    });
-  } catch (err) {
-    console.warn('Create page via /pages failed, fallback to child_page block:', err);
-    const appended = await notionRequest(`/blocks/${parentPageId}/children`, {
-      method: 'PATCH',
-      token: notionToken,
-      json: {
-        children: [
-          {
-            object: 'block',
-            type: 'child_page',
-            child_page: {
-              title: pageTitle,
-            },
-          },
-        ],
-      },
-    });
-    created = appended?.results?.[0] || null;
-  }
+  const created = await createNotionWriteTargetPage({
+    token: notionToken,
+    targetType,
+    targetId,
+    pageTitle,
+  });
 
   const pageId = created?.id;
   if (!pageId) {
@@ -1518,18 +1775,31 @@ notionDiscoverPagesBtn?.addEventListener('click', async () => {
     return;
   }
   notionDiscoverPagesBtn.disabled = true;
-  setNotionConfigStatus('正在拉取可写页面...', 'warn');
+  setNotionConfigStatus('正在拉取可写目标（页面/数据库）...', 'warn');
   try {
-    const pages = await discoverWritableNotionPages(token);
+    const targets = await discoverWritableNotionTargets(token);
     state.notionToken = token;
-    state.notionPageCandidates = pages;
-    applyNotionPageCandidates(pages);
-    if (pages.length) {
-      setNotionConfigStatus(`发现 ${pages.length} 个可写页面，请选择一个`, 'ok');
-      setStatusChip('状态：可选页面已加载', 'ok');
+    state.notionTargetCandidates = targets;
+    const currentType = getCurrentNotionTargetType();
+    const currentId = toNotionUuid(state.notionParentPageId || notionParentPageInput?.value?.trim() || '');
+    if (currentId) {
+      const current = targets.find(item => item.id === currentId && item.type === currentType);
+      if (current) {
+        setLastTargetTitleByType(currentType, current.title || '');
+      }
+    }
+    applyNotionTargetCandidates(targets);
+    persistNotionTargetSelection().catch(err => {
+      console.warn('Persist notion candidates cache failed:', err);
+    });
+    if (targets.length) {
+      const pageCount = targets.filter(item => item.type === 'page').length;
+      const databaseCount = targets.filter(item => item.type === 'database').length;
+      setNotionConfigStatus(`发现 ${targets.length} 个可写目标（页面 ${pageCount} / 数据库 ${databaseCount}）`, 'ok');
+      setStatusChip('状态：可写目标已加载', 'ok');
     } else {
-      setNotionConfigStatus('未发现可写页面，请先在 Notion 中 Add connections', 'warn');
-      setStatusChip('状态：未发现可写页面', 'warn');
+      setNotionConfigStatus('未发现可写目标，请先在 Notion 中 Add connections', 'warn');
+      setStatusChip('状态：未发现可写目标', 'warn');
     }
   } catch (err) {
     const message = typeof err?.message === 'string' ? err.message : '拉取失败';
@@ -1541,16 +1811,38 @@ notionDiscoverPagesBtn?.addEventListener('click', async () => {
 });
 
 notionPageSelect?.addEventListener('change', () => {
-  const selectedId = notionPageSelect.value || '';
-  if (!selectedId) return;
-  const selectedPage = state.notionPageCandidates.find(page => page.id === selectedId) || null;
-  state.notionParentPageId = selectedId;
-  if (notionParentPageInput) notionParentPageInput.value = selectedId;
-  if (selectedPage) {
-    setNotionConfigStatus(`已选择：${selectedPage.title}`, 'ok');
+  const parsed = parseNotionTargetValue(notionPageSelect.value || '');
+  if (!parsed.id || !parsed.type) return;
+  const selectedTarget =
+    state.notionTargetCandidates.find(item => item.id === parsed.id && item.type === parsed.type) || null;
+  state.notionParentPageId = parsed.id;
+  state.notionWriteTargetType = parsed.type;
+  setLastTargetIdByType(parsed.type, parsed.id);
+  if (notionParentPageInput) notionParentPageInput.value = parsed.id;
+  if (notionTargetTypeSelect) notionTargetTypeSelect.value = parsed.type;
+  persistNotionTargetSelection().catch(err => {
+    console.warn('Persist notion target selection failed:', err);
+  });
+  const label = parsed.type === 'database' ? '数据库' : '页面';
+  if (selectedTarget) {
+    setLastTargetTitleByType(parsed.type, selectedTarget.title || '');
+    setNotionConfigStatus(`已选择${label}：${selectedTarget.title}`, 'ok');
   } else {
-    setNotionConfigStatus('已填充 Parent Page', 'ok');
+    setNotionConfigStatus(`已填充${label} ID`, 'ok');
   }
+});
+
+notionTargetTypeSelect?.addEventListener('change', () => {
+  const targetType = notionTargetTypeSelect.value === 'database' ? 'database' : 'page';
+  state.notionWriteTargetType = targetType;
+  const nextId = getLastTargetIdByType(targetType);
+  state.notionParentPageId = nextId || '';
+  if (notionParentPageInput) notionParentPageInput.value = state.notionParentPageId;
+  applyNotionTargetCandidates(state.notionTargetCandidates);
+  persistNotionTargetSelection().catch(err => {
+    console.warn('Persist notion target type failed:', err);
+  });
+  setNotionConfigStatus(targetType === 'database' ? '已切换到数据库模式' : '已切换到页面模式', 'ok');
 });
 
 clipToNotionBtn?.addEventListener('click', async () => {

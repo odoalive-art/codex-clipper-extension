@@ -24,7 +24,11 @@ development (direct clip to Notion landed; next focus is Notion reliability and 
 - 支持预览区“逐张复制图片”（二进制写入剪贴板）以提升公众号图片可用性
 - 支持导出 Notion 导入包（zip）：`article.md + images/*` 本地相对路径
 - 支持 Notion 直连剪藏：Side Panel 内配置 Integration Token 与 Parent Page，直接创建页面并写入文字与图片
-- 支持 Notion 连接辅助：可在 Side Panel 内验证连接并自动发现可写页面，点选后自动填充 Parent Page
+- 支持 Notion 连接辅助：可在 Side Panel 内验证连接并自动发现可写目标（页面/数据库），点选后自动填充 ID
+- Notion 写入目标支持页面/数据库二选一；数据库模式会自动识别标题字段后创建记录
+- 可写目标列表已按“写入目标类型”联动过滤（页面模式仅显示页面，数据库模式仅显示数据库）
+- 已支持分类型记忆最近选择（页面/数据库各自记忆，上下切换自动回填）
+- 插件重启后会恢复上次可写目标选择：缓存目标列表并保留最近目标名称，避免重复发现/重复选择
 - 已优化多图性能：公众号图片本地化改为并发处理，Notion 图片上传改为限流并发并展示进度
 - 已修复 Side Panel 打开后切换标签页时 `site badges` 高亮不刷新的问题（监听 tab 激活/更新）
 - Side Panel UI 模块已重整：Header 去品牌、Footer 改为结果态多操作交互（重新抓取/复制 Markdown/导出/发送 Notion）
@@ -45,7 +49,7 @@ development (direct clip to Notion landed; next focus is Notion reliability and 
 当前开发重点。
 
 1. 继续处理公众号图片抓取问题（抓取稳定性、图片可用性与后续导入路径）
-2. 完善 Notion 直连流程（错误提示、配置体验、失败重试与批量稳定性；已修复标题重复）
+2. 完善 Notion 直连流程（错误提示、配置体验、失败重试与批量稳定性；已修复标题重复，并支持数据库写入）
 3. 补充回归测试与样例页面验证流程
 
 ## Next Session
@@ -54,8 +58,8 @@ development (direct clip to Notion landed; next focus is Notion reliability and 
 
 1. 先执行 `执行【上下文同步】`，确认当前分支与任务边界
 2. 按 `docs/regression-cases.md` 执行最小回归案例（重点 Case 2/3/4/5）
-3. 用真实 Notion 直连验证代码块语言映射、链接、列表标记写入是否符合预期
-4. 下一高优先级：抽取 `extractor.js` 与 `rules.js` 的重复规则定义，避免双份维护
+3. 用真实 Notion 直连验证“页面模式/数据库模式”写入行为（含标题字段自动识别）
+4. 下一高优先级：增强 Notion 目标选择体验（可选“显示全部”、搜索过滤、分组计数）
 
 ## Key Files
 

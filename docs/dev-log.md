@@ -534,3 +534,63 @@ Notes:
   - `docs/dev-log.md`
 - Notes:
   - 当前自动回归已通过：4 个 case（extractor 3 + Notion 映射 1）。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: Notion 直连新增数据库写入目标（页面/数据库二选一）。
+- Changes:
+  - 更新 `sidepanel.html`：Notion 配置区新增“写入目标类型”选择，并将“自动发现页面”升级为“自动发现目标”
+  - 更新 `sidepanel.js`：自动发现合并页面与数据库结果，下拉选项区分 `[页面]`/`[数据库]`
+  - 更新 `sidepanel.js`：发送 Notion 时按目标类型分流
+    - 页面模式：沿用 page parent 创建子页面
+    - 数据库模式：自动读取数据库标题属性并创建记录（兼容 `database_id` / `data_source_id`）
+  - 更新 `rules.js`：新增 `notionWriteTargetType` 存储键
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `rules.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 本次先完成“数据库写入目标选择”；“重启后自动保留已选目标并免重复选择”下一步继续。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 优化 Notion 可写目标选择体验（按类型过滤 + 分类型记忆）。
+- Changes:
+  - 更新 `sidepanel.js`：可写目标下拉按当前“写入目标类型”过滤（页面模式仅显示页面，数据库模式仅显示数据库）
+  - 更新 `sidepanel.js`：新增分类型最近选择持久化（`notionLastPageId`、`notionLastDataSourceId`）
+  - 更新 `sidepanel.js`：切换写入类型时自动回填该类型最近目标，并同步更新输入框与本地存储
+  - 更新 `rules.js`：新增上述两个存储键
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `rules.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 该优化与“重启后保留已选目标”目标一致，切换模式时无需重复查找目标。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 完成 Notion 目标选择重启恢复（免重复发现/选择）。
+- Changes:
+  - 更新 `sidepanel.js`：新增可写目标缓存恢复（`notionTargetCandidatesCache`）
+  - 更新 `sidepanel.js`：新增最近目标名称持久化（`notionLastPageTitle`、`notionLastDataSourceTitle`）
+  - 更新 `sidepanel.js`：启动时优先恢复缓存目标下拉；缓存缺失时显示“最近选择”占位项
+  - 更新 `rules.js`：新增上述存储键
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `rules.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 重启插件后，若 Token/目标未变化，通常无需再次点击“自动发现目标”即可直接发送。
