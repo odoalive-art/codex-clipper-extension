@@ -1,6 +1,8 @@
 export const SUPPORTED_SITES = [
   { host: 'xiaobot.net', label: '小报童' },
   { host: 'mp.weixin.qq.com', label: '公众号' },
+  { host: 'zcool.com.cn', label: '站酷' },
+  { host: 'sspai.com', label: '少数派' },
 ];
 
 export async function extractPageContent(options = {}) {
@@ -15,7 +17,7 @@ export async function extractPageContent(options = {}) {
       match: { hostSuffix: 'xiaobot.net' },
       rootSelectors: ['.paper-content', '.post-content', 'article', 'main'],
       titleSelectors: ['h1'],
-      contentSelectors: ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img'],
+      contentSelectors: ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img', 'video'],
       exclude: {
         ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
         ancestorClassRegex:
@@ -39,7 +41,7 @@ export async function extractPageContent(options = {}) {
       match: { hostEquals: 'mp.weixin.qq.com' },
       rootSelectors: ['#js_content', '.rich_media_content', 'article', 'main'],
       titleSelectors: ['#activity-name .js_title_inner', '#activity-name', '.rich_media_title'],
-      contentSelectors: ['h1', 'h2', 'h3', 'p', 'section', 'li', 'blockquote', 'pre', 'div', 'img'],
+      contentSelectors: ['h1', 'h2', 'h3', 'p', 'section', 'li', 'blockquote', 'pre', 'div', 'img', 'video'],
       exclude: {
         ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
         ancestorClassRegex:
@@ -57,6 +59,46 @@ export async function extractPageContent(options = {}) {
         minLength: 1,
         dedupe: true,
         skipIfHasDescendantSelector: 'p, h1, h2, h3, li, blockquote, pre, section, div',
+      },
+      limits: { maxBlocks: 500, maxChars: 80000 },
+    },
+    {
+      id: 'sspai-article',
+      label: '少数派',
+      enabled: true,
+      match: { hostSuffix: 'sspai.com' },
+      rootSelectors: [
+        '.article_main__content.wangEditor-txt',
+        '.article_main__content',
+        '.article_main_wrapper .article-content',
+        '.article_main_wrapper',
+        '.article-detail .article-content',
+        '.article-content',
+        '.post-content',
+        '.entry-content',
+        '.article',
+        'article',
+        'main',
+      ],
+      titleSelectors: ['#article-title', 'h1.article-title', '.article .title h1', '.title h1', '.article-header h1', 'h1'],
+      contentSelectors: ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img', 'video'],
+      exclude: {
+        ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
+        ancestorClassRegex:
+          '\\b(nav|header|footer|sidebar|menu|ad|advertisement|recommend|related|comment|copyright|share|toolbar|breadcrumb|author|userinfo|meta|tag|license|statement)\\b',
+        textRegex:
+          '^(收藏|关注|私信|点赞|评论|分享|举报|更多|展开|收起|查看|复制|下载|购买|加购|立即|确认|取消|返回|登录|注册)$',
+      },
+      image: {
+        srcAttrs: ['data-src', 'data-original', 'data-original-src', 'data-srcset', 'srcset', 'src'],
+        minWidth: 80,
+        minHeight: 80,
+        rejectSrcRegex: '(avatar|icon|logo|emoji|badge|sprite|btn|button|arrow|loading|placeholder|qrcode)',
+      },
+      text: {
+        minLength: 1,
+        dedupe: true,
+        skipIfHasDescendantSelector: 'p, h1, h2, h3, li, blockquote, pre, img, video',
       },
       limits: { maxBlocks: 500, maxChars: 80000 },
     },
@@ -85,6 +127,19 @@ export async function extractPageContent(options = {}) {
     return list.length ? list : fallback;
   }
 
+  function mergeStringLists(base, extra) {
+    const output = [];
+    const seen = new Set();
+    [...(Array.isArray(base) ? base : []), ...(Array.isArray(extra) ? extra : [])].forEach(item => {
+      if (typeof item !== 'string') return;
+      const value = item.trim();
+      if (!value || seen.has(value)) return;
+      seen.add(value);
+      output.push(value);
+    });
+    return output;
+  }
+
   function normalizeMatch(match) {
     if (!match || typeof match !== 'object') return null;
     const hostSuffix = typeof match.hostSuffix === 'string' ? match.hostSuffix.trim() : '';
@@ -106,7 +161,7 @@ export async function extractPageContent(options = {}) {
       match,
       rootSelectors: toStringList(rule.rootSelectors, ['article', 'main', '[role="main"]', 'body']),
       titleSelectors: toStringList(rule.titleSelectors, ['h1']),
-      contentSelectors: toStringList(rule.contentSelectors, ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img']),
+      contentSelectors: toStringList(rule.contentSelectors, ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img', 'video']),
       exclude: {
         ancestorTags: toStringList(rule.exclude?.ancestorTags, ['NAV', 'HEADER', 'FOOTER', 'ASIDE']),
         ancestorClassRegex:
@@ -143,7 +198,46 @@ export async function extractPageContent(options = {}) {
   function normalizeRules(inputRules) {
     const list = Array.isArray(inputRules) ? inputRules : [];
     const normalized = list.map(normalizeRule).filter(Boolean);
-    return normalized.length ? normalized : clone(DEFAULT_RULES);
+    if (!normalized.length) return clone(DEFAULT_RULES);
+
+    const defaults = clone(DEFAULT_RULES);
+    const byId = new Map(normalized.map(rule => [rule.id, rule]));
+    const merged = defaults.map(defaultRule => {
+      const userRule = byId.get(defaultRule.id);
+      if (!userRule) return defaultRule;
+      return {
+        ...defaultRule,
+        ...userRule,
+        match: { ...defaultRule.match, ...userRule.match },
+        rootSelectors: mergeStringLists(defaultRule.rootSelectors, userRule.rootSelectors),
+        titleSelectors: mergeStringLists(defaultRule.titleSelectors, userRule.titleSelectors),
+        contentSelectors: mergeStringLists(defaultRule.contentSelectors, userRule.contentSelectors),
+        exclude: {
+          ...defaultRule.exclude,
+          ...userRule.exclude,
+          ancestorTags: mergeStringLists(defaultRule.exclude.ancestorTags, userRule.exclude?.ancestorTags),
+        },
+        image: {
+          ...defaultRule.image,
+          ...userRule.image,
+          srcAttrs: mergeStringLists(defaultRule.image.srcAttrs, userRule.image?.srcAttrs),
+        },
+        text: {
+          ...defaultRule.text,
+          ...userRule.text,
+        },
+        limits: {
+          ...defaultRule.limits,
+          ...userRule.limits,
+        },
+      };
+    });
+    const defaultIds = new Set(defaults.map(rule => rule.id));
+    normalized.forEach(rule => {
+      if (defaultIds.has(rule.id)) return;
+      merged.push(rule);
+    });
+    return merged;
   }
 
   function hostMatches(hostname, match) {
@@ -165,15 +259,42 @@ export async function extractPageContent(options = {}) {
     return { root: document.body, selector: 'body' };
   }
 
+  function firstSrcFromSrcset(raw) {
+    const value = String(raw || '').trim();
+    if (!value) return '';
+    const first = value.split(',')[0]?.trim() || '';
+    if (!first) return '';
+    return first.split(/\s+/)[0] || '';
+  }
+
   function resolveImageSrc(el, srcAttrs) {
     const candidates = [];
     srcAttrs.forEach(attr => {
       if (attr === 'src') candidates.push(el.src);
+      else if (attr === 'srcset') candidates.push(firstSrcFromSrcset(el.getAttribute('srcset') || el.srcset || ''));
       else candidates.push(el.getAttribute(attr));
     });
+    candidates.push(firstSrcFromSrcset(el.getAttribute('srcset') || el.srcset || ''));
     candidates.push(el.currentSrc);
     candidates.push(el.src);
 
+    for (const raw of candidates) {
+      if (!raw || typeof raw !== 'string') continue;
+      if (raw.startsWith('data:') || raw.startsWith('blob:')) continue;
+      try {
+        const url = new URL(raw, location.href);
+        if (SAFE_PROTOCOLS.has(url.protocol)) return url.href;
+      } catch {
+        continue;
+      }
+    }
+    return '';
+  }
+
+  function resolveVideoSrc(el) {
+    const candidates = [el.getAttribute('src'), el.currentSrc, el.src];
+    const sourceEl = el.querySelector('source[src]');
+    if (sourceEl) candidates.push(sourceEl.getAttribute('src'));
     for (const raw of candidates) {
       if (!raw || typeof raw !== 'string') continue;
       if (raw.startsWith('data:') || raw.startsWith('blob:')) continue;
@@ -325,7 +446,23 @@ export async function extractPageContent(options = {}) {
     if (tagName === 'H2') return 'h2';
     if (tagName === 'H3') return 'h3';
     if (tagName === 'LI') return 'li';
+    if (tagName === 'BLOCKQUOTE') return 'quote';
     return 'p';
+  }
+
+  function parseQuoteLikeParagraph(tagName, text) {
+    if (tagName !== 'P' || typeof text !== 'string') return { content: text, forceQuote: false };
+    const normalized = text.replace(/\r\n?/g, '\n').trim();
+    if (!normalized) return { content: text, forceQuote: false };
+
+    const lines = normalized.split('\n');
+    const quoteLineRe = /^\s*[>\uFF1E]\s?/;
+    const allQuoted = lines.every(line => quoteLineRe.test(line));
+    if (!allQuoted) return { content: text, forceQuote: false };
+
+    const stripped = lines.map(line => line.replace(quoteLineRe, '')).join('\n').trim();
+    if (!stripped) return { content: text, forceQuote: false };
+    return { content: stripped, forceQuote: true };
   }
 
   function detectCodeLanguage(el) {
@@ -450,7 +587,7 @@ export async function extractPageContent(options = {}) {
 
     const titleSelector = rule.titleSelectors.join(', ');
     const titleEl = titleSelector ? document.querySelector(titleSelector) : null;
-    if (titleEl && !root.contains(titleEl)) {
+    if (titleEl) {
       const title = titleEl.innerText?.trim() || '';
       if (title) {
         blocks.push({ type: 'h1', content: title });
@@ -504,6 +641,21 @@ export async function extractPageContent(options = {}) {
 
         seenImage.add(src);
         blocks.push({ type: 'img', src });
+        debug.counters.kept += 1;
+        continue;
+      }
+      if (el.tagName === 'VIDEO') {
+        const src = resolveVideoSrc(el);
+        if (!src) {
+          debug.counters.skipInvalidImageSrc += 1;
+          continue;
+        }
+        if (seenImage.has(src)) {
+          debug.counters.skipDuplicateImage += 1;
+          continue;
+        }
+        seenImage.add(src);
+        blocks.push({ type: 'video', src });
         debug.counters.kept += 1;
         continue;
       }
@@ -565,7 +717,8 @@ export async function extractPageContent(options = {}) {
       }
       const listMeta = listMetaForItem(el);
       const marker = listMeta?.marker || '';
-      const content = text;
+      const quoteLike = parseQuoteLikeParagraph(el.tagName, text);
+      const content = quoteLike.content;
       if (rule.text.dedupe && seenText.has(content)) {
         debug.counters.skipDuplicateText += 1;
         continue;
@@ -575,7 +728,7 @@ export async function extractPageContent(options = {}) {
       seenText.add(content);
       totalChars += content.length;
       blocks.push({
-        type: mapTagToType(el.tagName),
+        type: quoteLike.forceQuote ? 'quote' : mapTagToType(el.tagName),
         content,
         ...(listMeta ? { listType: listMeta.listType, marker: listMeta.marker } : {}),
         ...(segments.length ? { segments } : {}),
@@ -598,7 +751,7 @@ export async function extractPageContent(options = {}) {
     match: { hostRegex: '.*' },
     rootSelectors: ['article', '[role="main"]', '.article-content', '.post-content', 'main', 'body'],
     titleSelectors: ['h1'],
-    contentSelectors: ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img'],
+    contentSelectors: ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img', 'video'],
   });
 
   const targetRule = activeRule || fallbackRule;

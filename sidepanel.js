@@ -14,10 +14,13 @@ const grabBtn = document.getElementById('grabBtn');
 const copyBtn = document.getElementById('copyBtn');
 const preview = document.getElementById('preview');
 const siteBadges = document.getElementById('siteBadges');
-const rulesInput = document.getElementById('rulesInput');
-const saveRulesBtn = document.getElementById('saveRulesBtn');
-const resetRulesBtn = document.getElementById('resetRulesBtn');
-const copyRulesBtn = document.getElementById('copyRulesBtn');
+const ruleEditorSelect = document.getElementById('ruleEditorSelect');
+const ruleLabelInput = document.getElementById('ruleLabelInput');
+const ruleContentInput = document.getElementById('ruleContentInput');
+const createRuleBtn = document.getElementById('createRuleBtn');
+const saveRuleEditorBtn = document.getElementById('saveRuleEditorBtn');
+const deleteRuleBtn = document.getElementById('deleteRuleBtn');
+const ruleEditorStatus = document.getElementById('ruleEditorStatus');
 const debugOutput = document.getElementById('debugOutput');
 const debugModeCheckbox = document.getElementById('debugModeCheckbox');
 const statusChip = document.getElementById('statusChip');
@@ -52,6 +55,9 @@ const state = {
   notionLastPageTitle: '',
   notionLastDataSourceTitle: '',
   notionTargetCandidates: [],
+  lastGrabTabId: 0,
+  lastGrabUrl: '',
+  activeRuleId: '',
   previewBlocks: [],
 };
 
@@ -169,12 +175,6 @@ function renderStatus(message, kind = '') {
   else setStatusChip('状态：就绪');
 }
 
-function renderRulesJson() {
-  if (rulesInput) {
-    rulesInput.value = JSON.stringify(state.rules, null, 2);
-  }
-}
-
 function renderSiteBadges() {
   if (!siteBadges) return;
   const frag = document.createDocumentFragment();
@@ -187,6 +187,100 @@ function renderSiteBadges() {
     frag.appendChild(badge);
   });
   siteBadges.replaceChildren(frag);
+}
+
+function setRuleEditorStatus(message, tone = '') {
+  if (!ruleEditorStatus) return;
+  ruleEditorStatus.textContent = message || '';
+  ruleEditorStatus.style.color =
+    tone === 'error' ? '#b91c1c' : tone === 'ok' ? '#15803d' : tone === 'warn' ? '#b45309' : '#64748b';
+}
+
+function normalizeRuleId(raw) {
+  const text = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return text || `rule-${Date.now()}`;
+}
+
+function renderRuleEditorOptions() {
+  if (!ruleEditorSelect) return;
+  const frag = document.createDocumentFragment();
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = state.rules.length ? '请选择规则' : '暂无规则';
+  frag.appendChild(placeholder);
+  state.rules.forEach(rule => {
+    const option = document.createElement('option');
+    option.value = rule.id;
+    option.textContent = rule.label || rule.id;
+    option.title = ruleHostText(rule);
+    if (state.activeRuleId && state.activeRuleId === rule.id) option.selected = true;
+    frag.appendChild(option);
+  });
+  ruleEditorSelect.replaceChildren(frag);
+}
+
+function getRuleById(ruleId) {
+  return state.rules.find(rule => rule.id === ruleId) || null;
+}
+
+function fillRuleEditor(rule) {
+  if (!rule) {
+    if (ruleLabelInput) ruleLabelInput.value = '';
+    if (ruleContentInput) ruleContentInput.value = '';
+    return;
+  }
+  if (ruleLabelInput) ruleLabelInput.value = rule.label || rule.id || '';
+  if (ruleContentInput) {
+    const { id, label, enabled, ...rest } = rule;
+    const contentPayload = {
+      ...rest,
+      ...(enabled === false ? { enabled: false } : {}),
+    };
+    ruleContentInput.value = JSON.stringify(contentPayload, null, 2);
+  }
+}
+
+function buildRuleFromEditor(existingRule = null) {
+  const label = String(ruleLabelInput?.value || '').trim();
+  const contentRaw = String(ruleContentInput?.value || '').trim();
+  if (!contentRaw) throw new Error('请填写规则 JSON');
+  let parsed = null;
+  try {
+    parsed = JSON.parse(contentRaw);
+  } catch {
+    throw new Error('规则 JSON 解析失败');
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('规则 JSON 必须是对象');
+  }
+  const base = existingRule ? { ...existingRule } : { ...getDefaultRules()[0] };
+  const candidate = {
+    ...base,
+    ...parsed,
+    id: existingRule?.id || normalizeRuleId(label || parsed?.match?.hostSuffix || parsed?.match?.hostEquals || parsed?.match?.hostRegex),
+    label: label || existingRule?.label || parsed.label || '未命名规则',
+  };
+  const normalized = normalizeRules([candidate]);
+  if (!normalized[0]) throw new Error('规则结构无效，请检查 match 字段');
+  return normalized[0];
+}
+
+function refreshRuleEditorView() {
+  if (!state.activeRuleId && state.rules[0]) state.activeRuleId = state.rules[0].id;
+  renderRuleEditorOptions();
+  fillRuleEditor(getRuleById(state.activeRuleId));
+}
+
+async function persistRules(reasonText = '规则已保存') {
+  await chrome.storage.local.set({ [STORAGE_KEYS.siteRules]: state.rules });
+  renderSiteBadges();
+  refreshRuleEditorView();
+  await highlightCurrentSiteBadge();
+  setRuleEditorStatus(reasonText, 'ok');
 }
 
 function setStatusChip(text, tone = '') {
@@ -292,16 +386,61 @@ function renderToPreview(blocks) {
       const img = document.createElement('img');
       img.src = src;
       img.alt = '';
+      img.addEventListener('error', () => {
+        if (img.dataset.fallbackTried === '1') return;
+        img.dataset.fallbackTried = '1';
+        fetchImageBlob(src)
+          .then(blob => blobToDataUrl(blob))
+          .then(dataUrl => {
+            if (!dataUrl) return;
+            img.src = dataUrl;
+          })
+          .catch(err => {
+            console.warn('Preview image fallback failed:', err);
+          });
+      });
       const copyImageBtn = document.createElement('button');
       copyImageBtn.type = 'button';
       copyImageBtn.className = 'copy-image-btn';
       copyImageBtn.textContent = '复制图片';
       copyImageBtn.dataset.copyImageBtn = '1';
+      const copyLinkBtn = document.createElement('button');
+      copyLinkBtn.type = 'button';
+      copyLinkBtn.className = 'copy-link-btn';
+      copyLinkBtn.textContent = '复制链接';
+      copyLinkBtn.dataset.copyLinkBtn = '1';
+      copyLinkBtn.dataset.copyLinkValue = src;
 
       card.appendChild(img);
+      card.appendChild(copyLinkBtn);
       card.appendChild(copyImageBtn);
       frag.appendChild(card);
       renderedBlocks.push({ type: 'img', src });
+      return;
+    }
+    if (block.type === 'video') {
+      const src = normalizeHttpUrl(block.src || '');
+      if (!src) return;
+      const card = document.createElement('div');
+      card.className = 'preview-image-card';
+      const p = document.createElement('p');
+      p.textContent = '视频链接：';
+      const link = document.createElement('a');
+      link.href = src;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer nofollow';
+      link.textContent = src;
+      p.appendChild(link);
+      const copyLinkBtn = document.createElement('button');
+      copyLinkBtn.type = 'button';
+      copyLinkBtn.className = 'copy-link-btn';
+      copyLinkBtn.textContent = '复制链接';
+      copyLinkBtn.dataset.copyLinkBtn = '1';
+      copyLinkBtn.dataset.copyLinkValue = src;
+      card.appendChild(p);
+      card.appendChild(copyLinkBtn);
+      frag.appendChild(card);
+      renderedBlocks.push({ type: 'video', src });
       return;
     }
 
@@ -337,6 +476,7 @@ function renderToPreview(blocks) {
     if (block.type === 'h1') tagName = 'h1';
     else if (block.type === 'h2') tagName = 'h2';
     else if (block.type === 'h3') tagName = 'h3';
+    else if (block.type === 'quote') tagName = 'blockquote';
     else if (block.type === 'p') tagName = 'p';
     else if (block.type === 'li') tagName = 'p';
     if (!tagName) return;
@@ -469,8 +609,9 @@ async function loadSettings() {
   state.notionTargetCandidates = cachedTargets;
   applyNotionTargetCandidates(state.notionTargetCandidates);
   setNotionConfigStatus('');
-  renderRulesJson();
+  state.activeRuleId = state.rules[0]?.id || '';
   renderSiteBadges();
+  refreshRuleEditorView();
   setStatusChip('状态：就绪');
   setCountChip(preview.children.length || 0);
   await highlightCurrentSiteBadge();
@@ -621,43 +762,6 @@ function applyNotionTargetCandidates(targets) {
   notionPageSelect.replaceChildren(frag);
 }
 
-async function saveRulesFromInput() {
-  if (!rulesInput) return;
-  try {
-    const parsed = JSON.parse(rulesInput.value);
-    const normalized = normalizeRules(parsed);
-    state.rules = normalized;
-    await chrome.storage.local.set({ [STORAGE_KEYS.siteRules]: normalized });
-    renderRulesJson();
-    renderSiteBadges();
-    await highlightCurrentSiteBadge();
-    renderStatus('规则已保存', 'warn');
-  } catch (err) {
-    console.error('Invalid rules JSON:', err);
-    renderStatus('规则JSON无效，请检查格式', 'error');
-  }
-}
-
-async function resetRules() {
-  state.rules = getDefaultRules();
-  await chrome.storage.local.remove(STORAGE_KEYS.siteRules);
-  renderRulesJson();
-  renderSiteBadges();
-  await highlightCurrentSiteBadge();
-  renderStatus('已恢复默认规则', 'warn');
-}
-
-async function copyRulesJson() {
-  if (!rulesInput) return;
-  try {
-    await navigator.clipboard.writeText(rulesInput.value || '');
-    renderStatus('规则JSON已复制', 'warn');
-  } catch (err) {
-    console.error('Copy rules failed:', err);
-    renderStatus('复制规则失败，请重试', 'error');
-  }
-}
-
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -741,6 +845,10 @@ function collectPreviewBlocks() {
       blocks.push({ type: 'h3', content: text });
       continue;
     }
+    if (tag === 'BLOCKQUOTE' && text) {
+      blocks.push({ type: 'quote', content: text });
+      continue;
+    }
     if (tag === 'P' && text) {
       blocks.push({ type: 'p', content: text });
       continue;
@@ -766,10 +874,19 @@ function collectPreviewBlocks() {
       }
       return null;
     })();
-    if (!(imageNode instanceof HTMLImageElement)) continue;
-    const src = normalizePreviewUrl(imageNode.getAttribute('src') || imageNode.src || imageNode.currentSrc || '');
-    if (!src) continue;
-    blocks.push({ type: 'img', src });
+    if (imageNode instanceof HTMLImageElement) {
+      const src = normalizePreviewUrl(imageNode.getAttribute('src') || imageNode.src || imageNode.currentSrc || '');
+      if (!src) continue;
+      blocks.push({ type: 'img', src });
+      continue;
+    }
+    if (node instanceof Element && node.classList.contains('preview-image-card')) {
+      const linkValue = node.querySelector('[data-copy-link-value]')?.getAttribute('data-copy-link-value') || '';
+      const videoSrc = normalizeHttpUrl(linkValue);
+      if (videoSrc) {
+        blocks.push({ type: 'video', src: videoSrc });
+      }
+    }
   }
   return blocks;
 }
@@ -1221,24 +1338,92 @@ function blobToDataUrl(blob) {
 }
 
 async function fetchImageBlob(src) {
-  const response = await fetch(src, { credentials: 'include', cache: 'force-cache' });
-  if (!response.ok) {
-    throw new Error(`Image fetch failed: ${response.status}`);
+  const rawSrc = typeof src === 'string' ? src.trim() : '';
+  if (!rawSrc) throw new Error('Empty image source');
+
+  if (rawSrc.startsWith('data:') || rawSrc.startsWith('blob:')) {
+    const response = await fetch(rawSrc, { cache: 'force-cache' });
+    if (!response.ok) throw new Error(`Image fetch failed: ${response.status}`);
+    const blob = await response.blob();
+    if (!blob || !blob.size) throw new Error('Empty image blob');
+    return blob;
   }
-  const blob = await response.blob();
-  if (!blob || !blob.size) {
-    throw new Error('Empty image blob');
+
+  const httpSrc = normalizeHttpUrl(rawSrc);
+  if (!httpSrc) throw new Error('Invalid image URL');
+
+  const tabId = Number.isInteger(state.lastGrabTabId) && state.lastGrabTabId > 0 ? state.lastGrabTabId : 0;
+  const referrerUrl = normalizeHttpUrl(state.lastGrabUrl || '');
+
+  try {
+    const init = { credentials: 'omit', cache: 'force-cache', mode: 'cors' };
+    if (referrerUrl) {
+      init.referrer = referrerUrl;
+      init.referrerPolicy = 'strict-origin-when-cross-origin';
+    }
+    const response = await fetch(httpSrc, init);
+    if (!response.ok) {
+      throw new Error(`Image fetch failed: ${response.status}`);
+    }
+    const blob = await response.blob();
+    if (!blob || !blob.size) {
+      throw new Error('Empty image blob');
+    }
+    return blob;
+  } catch (directErr) {
+    if (!tabId) throw directErr;
+    try {
+      const injected = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: async imageUrl => {
+          try {
+            const response = await fetch(imageUrl, { credentials: 'omit', cache: 'force-cache', mode: 'cors' });
+            if (!response.ok) return { ok: false, error: `Image fetch failed: ${response.status}` };
+            const blob = await response.blob();
+            if (!blob || !blob.size) return { ok: false, error: 'Empty image blob' };
+            const dataUrl = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+              reader.onerror = () => reject(new Error('Failed to read blob in page context'));
+              reader.readAsDataURL(blob);
+            });
+            if (!dataUrl) return { ok: false, error: 'Failed to encode image in page context' };
+            return { ok: true, dataUrl };
+          } catch (err) {
+            const message = typeof err?.message === 'string' ? err.message : String(err);
+            return { ok: false, error: message || 'Unknown page-context image error' };
+          }
+        },
+        args: [httpSrc],
+      });
+      const result = injected?.[0]?.result;
+      if (!result?.ok || !result?.dataUrl) {
+        throw new Error(result?.error || 'Image fetch failed in page context');
+      }
+      const dataResponse = await fetch(result.dataUrl);
+      if (!dataResponse.ok) throw new Error(`Data URL decode failed: ${dataResponse.status}`);
+      const blob = await dataResponse.blob();
+      if (!blob || !blob.size) throw new Error('Empty image blob from page context');
+      return blob;
+    } catch (fallbackErr) {
+      throw new Error(`Image fetch failed: ${fallbackErr?.message || directErr?.message || 'unknown error'}`);
+    }
   }
-  return blob;
 }
 
 async function localizePreviewImagesForWechat() {
-  if (state.activeHost !== 'mp.weixin.qq.com') return { total: 0, localized: 0 };
+  const host = state.activeHost || '';
+  const shouldLocalize = host === 'mp.weixin.qq.com' || host === 'sspai.com';
+  if (!shouldLocalize) return { total: 0, localized: 0 };
   const images = Array.from(preview.querySelectorAll('img'));
   if (!images.length) return { total: 0, localized: 0 };
 
   const outputs = await mapWithConcurrency(images, 4, async image => {
-    const src = normalizeHttpUrl(image.getAttribute('src') || image.src || '');
+    const rawSrc = image.dataset.remoteSrc || image.getAttribute('src') || image.src || '';
+    const normalizedPreview = normalizePreviewUrl(rawSrc);
+    if (!normalizedPreview) return 0;
+    if (normalizedPreview.startsWith('data:') || normalizedPreview.startsWith('blob:')) return 0;
+    const src = normalizeHttpUrl(normalizedPreview);
     if (!src) return 0;
     try {
       const blob = await fetchImageBlob(src);
@@ -1263,24 +1448,26 @@ async function copySinglePreviewImage(imageEl) {
   if (!src) {
     throw new Error('No image source');
   }
-  const response = await fetch(src, { credentials: 'include', cache: 'force-cache' });
-  if (!response.ok) {
-    throw new Error(`Image fetch failed: ${response.status}`);
-  }
-  const blob = await response.blob();
-  if (!blob || !blob.size) {
-    throw new Error('Empty image blob');
-  }
+  const blob = await fetchImageBlob(src);
 
   if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
     throw new Error('Rich clipboard not supported');
   }
   const mimeType = typeof blob.type === 'string' && blob.type.startsWith('image/') ? blob.type : 'image/png';
-  await navigator.clipboard.write([
-    new ClipboardItem({
-      [mimeType]: blob,
-    }),
-  ]);
+  try {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        [mimeType]: blob,
+      }),
+    ]);
+    return { mode: 'binary', mimeType };
+  } catch (err) {
+    if (mimeType === 'image/gif' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(src);
+      return { mode: 'url', mimeType };
+    }
+    throw err;
+  }
 }
 
 function inlineSegmentsToMarkdown(content, segments) {
@@ -1311,12 +1498,13 @@ async function buildNotionExportZipBlob() {
   const blocks = collectPreviewBlocks();
   for (const block of blocks) {
     if (!block || typeof block !== 'object') continue;
-    if ((block.type === 'h1' || block.type === 'h2' || block.type === 'h3' || block.type === 'p') && block.content) {
+    if ((block.type === 'h1' || block.type === 'h2' || block.type === 'h3' || block.type === 'p' || block.type === 'quote') && block.content) {
       const text = inlineSegmentsToMarkdown(block.content, block.segments);
       if (!text.trim()) continue;
       if (block.type === 'h1') markdownLines.push(`# ${text}`);
       else if (block.type === 'h2') markdownLines.push(`## ${text}`);
       else if (block.type === 'h3') markdownLines.push(`### ${text}`);
+      else if (block.type === 'quote') markdownLines.push(`> ${text}`);
       else markdownLines.push(text);
       continue;
     }
@@ -1332,6 +1520,12 @@ async function buildNotionExportZipBlob() {
       if (!normalizedCode.trim()) continue;
       const language = normalizeCodeLanguage(block.language);
       markdownLines.push(`\`\`\`${language === 'plain text' ? '' : language}\n${normalizedCode}\n\`\`\``);
+      continue;
+    }
+    if (block.type === 'video') {
+      const src = normalizeHttpUrl(block.src || '');
+      if (!src) continue;
+      markdownLines.push(`[视频](${src})`);
       continue;
     }
     if (block.type !== 'img') continue;
@@ -1407,6 +1601,19 @@ async function clipPreviewToNotion() {
   let imageCount = 0;
   const mappedChildren = await mapWithConcurrency(blocksForChildren, 3, async (block, index) => {
     if (block.type !== 'img') {
+      if (block.type === 'video') {
+        const src = normalizeHttpUrl(block.src || '');
+        if (src) {
+          return [
+            {
+              object: 'block',
+              type: 'embed',
+              embed: { url: src },
+            },
+          ];
+        }
+        return textBlockToNotion('p', '[视频]');
+      }
       if (block.type === 'code') {
         return codeBlockToNotion(block.content, block.language);
       }
@@ -1438,6 +1645,21 @@ async function clipPreviewToNotion() {
       finishedImages += 1;
       setStatusChip(`状态：发送 Notion 中（图片 ${finishedImages}/${totalImages}）`, 'running');
       console.warn('Upload image to Notion failed:', err);
+      const fallbackUrl = normalizeHttpUrl(block.src || '');
+      if (fallbackUrl) {
+        return [
+          {
+            object: 'block',
+            type: 'image',
+            image: {
+              type: 'external',
+              external: {
+                url: fallbackUrl,
+              },
+            },
+          },
+        ];
+      }
       return textBlockToNotion('p', `[图片上传失败] ${block.src}`);
     }
   });
@@ -1487,7 +1709,7 @@ async function buildClipboardPayload() {
   const blocks = collectPreviewBlocks();
   for (const block of blocks) {
     if (!block || typeof block !== 'object') continue;
-    if ((block.type === 'h1' || block.type === 'h2' || block.type === 'h3' || block.type === 'p') && block.content) {
+    if ((block.type === 'h1' || block.type === 'h2' || block.type === 'h3' || block.type === 'p' || block.type === 'quote') && block.content) {
       const mdText = inlineSegmentsToMarkdown(block.content, block.segments);
       const htmlText = inlineSegmentsToHtml(block.content, block.segments);
       if (!mdText.trim()) continue;
@@ -1500,6 +1722,9 @@ async function buildClipboardPayload() {
       } else if (block.type === 'h3') {
         markdownLines.push(`### ${mdText}`);
         htmlLines.push(`<h3>${htmlText}</h3>`);
+      } else if (block.type === 'quote') {
+        markdownLines.push(`> ${mdText}`);
+        htmlLines.push(`<blockquote>${htmlText}</blockquote>`);
       } else {
         markdownLines.push(mdText);
         htmlLines.push(`<p>${htmlText}</p>`);
@@ -1522,6 +1747,13 @@ async function buildClipboardPayload() {
       const language = normalizeCodeLanguage(block.language);
       markdownLines.push(`\`\`\`${language === 'plain text' ? '' : language}\n${normalizedCode}\n\`\`\``);
       htmlLines.push(`<pre data-language="${escapeHtml(language)}"><code>${escapeHtml(normalizedCode)}</code></pre>`);
+      continue;
+    }
+    if (block.type === 'video') {
+      const src = normalizeHttpUrl(block.src || '');
+      if (!src) continue;
+      markdownLines.push(`[视频](${src})`);
+      htmlLines.push(`<p><a href="${escapeHtml(src)}" target="_blank" rel="noopener noreferrer nofollow">视频链接</a></p>`);
       continue;
     }
 
@@ -1573,6 +1805,8 @@ grabBtn.addEventListener('click', async () => {
     return;
   }
   state.activeHost = hostFromUrl(tab.url);
+  state.lastGrabTabId = tab.id;
+  state.lastGrabUrl = tab.url || '';
 
   grabBtn.disabled = true;
   setBtn(grabBtn, 'refreshCw', '抓取中...');
@@ -1594,7 +1828,7 @@ grabBtn.addEventListener('click', async () => {
     }
 
     renderToPreview(blocks);
-    if (state.activeHost === 'mp.weixin.qq.com') {
+    if (state.activeHost === 'mp.weixin.qq.com' || state.activeHost === 'sspai.com') {
       setStatusChip('状态：图片处理中', 'running');
       const result = await localizePreviewImagesForWechat();
       if (result.total > 0 && result.localized > 0) {
@@ -1691,6 +1925,30 @@ copyBtn.addEventListener('click', async () => {
 preview.addEventListener('click', async event => {
   const target = event.target;
   if (!(target instanceof Element)) return;
+  const copyLinkBtn = target.closest('[data-copy-link-btn]');
+  if (copyLinkBtn instanceof HTMLButtonElement) {
+    const value = copyLinkBtn.getAttribute('data-copy-link-value') || '';
+    if (!value) return;
+    const originalText = copyLinkBtn.textContent || '复制链接';
+    copyLinkBtn.disabled = true;
+    copyLinkBtn.textContent = '复制中...';
+    try {
+      await navigator.clipboard.writeText(value);
+      copyLinkBtn.textContent = '已复制';
+      setStatusChip('状态：链接已复制', 'ok');
+    } catch (err) {
+      console.error('Copy link failed:', err);
+      copyLinkBtn.textContent = '复制失败';
+      setStatusChip('状态：链接复制失败', 'error');
+    } finally {
+      setTimeout(() => {
+        copyLinkBtn.disabled = false;
+        copyLinkBtn.textContent = originalText;
+      }, 1200);
+    }
+    return;
+  }
+
   const btn = target.closest('[data-copy-image-btn]');
   if (!(btn instanceof HTMLButtonElement)) return;
 
@@ -1701,9 +1959,14 @@ preview.addEventListener('click', async event => {
   btn.disabled = true;
   btn.textContent = '复制中...';
   try {
-    await copySinglePreviewImage(image);
-    btn.textContent = '已复制';
-    setStatusChip('状态：单图已复制', 'ok');
+    const copied = await copySinglePreviewImage(image);
+    if (copied?.mode === 'url') {
+      btn.textContent = '已复制链接';
+      setStatusChip('状态：GIF已转为链接复制', 'warn');
+    } else {
+      btn.textContent = '已复制';
+      setStatusChip('状态：单图已复制', 'ok');
+    }
   } catch (err) {
     console.error('Copy single image failed:', err);
     btn.textContent = '复制失败';
@@ -1874,9 +2137,80 @@ clipToNotionBtn?.addEventListener('click', async () => {
   }
 });
 
-saveRulesBtn?.addEventListener('click', saveRulesFromInput);
-resetRulesBtn?.addEventListener('click', resetRules);
-copyRulesBtn?.addEventListener('click', copyRulesJson);
+siteBadges?.addEventListener('click', event => {
+  const target = event.target instanceof Element ? event.target.closest('.site-badge[data-rule-id]') : null;
+  if (!(target instanceof HTMLElement)) return;
+  const ruleId = target.dataset.ruleId || '';
+  if (!ruleId) return;
+  state.activeRuleId = ruleId;
+  refreshRuleEditorView();
+  setRuleEditorStatus(`已加载标签：${target.textContent || ruleId}`, 'ok');
+});
+
+ruleEditorSelect?.addEventListener('change', () => {
+  const ruleId = ruleEditorSelect.value || '';
+  if (!ruleId) return;
+  state.activeRuleId = ruleId;
+  fillRuleEditor(getRuleById(ruleId));
+  setRuleEditorStatus('已切换规则', 'ok');
+});
+
+createRuleBtn?.addEventListener('click', async () => {
+  try {
+    const candidate = buildRuleFromEditor(null);
+    const exists = state.rules.some(rule => rule.id === candidate.id);
+    if (exists) {
+      throw new Error('规则 ID 已存在，请更换标签名或匹配值');
+    }
+    state.rules = normalizeRules([...state.rules, candidate]);
+    state.activeRuleId = candidate.id;
+    await persistRules(`已新增标签：${candidate.label}`);
+    renderStatus('新增标签规则成功', 'warn');
+  } catch (err) {
+    const message = typeof err?.message === 'string' ? err.message : '新增失败';
+    setRuleEditorStatus(`新增失败：${message}`, 'error');
+  }
+});
+
+saveRuleEditorBtn?.addEventListener('click', async () => {
+  if (!state.activeRuleId) {
+    setRuleEditorStatus('请先选择一个规则', 'warn');
+    return;
+  }
+  try {
+    const index = state.rules.findIndex(rule => rule.id === state.activeRuleId);
+    if (index < 0) {
+      throw new Error('未找到当前规则');
+    }
+    const updated = buildRuleFromEditor(state.rules[index]);
+    const nextRules = [...state.rules];
+    nextRules[index] = updated;
+    state.rules = normalizeRules(nextRules);
+    await persistRules(`已保存标签：${updated.label}`);
+    renderStatus('标签规则已保存', 'warn');
+  } catch (err) {
+    const message = typeof err?.message === 'string' ? err.message : '保存失败';
+    setRuleEditorStatus(`保存失败：${message}`, 'error');
+  }
+});
+
+deleteRuleBtn?.addEventListener('click', async () => {
+  if (!state.activeRuleId) {
+    setRuleEditorStatus('请先选择一个规则', 'warn');
+    return;
+  }
+  const toDelete = getRuleById(state.activeRuleId);
+  if (!toDelete) {
+    setRuleEditorStatus('当前规则不存在', 'error');
+    return;
+  }
+  const nextRules = state.rules.filter(rule => rule.id !== state.activeRuleId);
+  state.rules = normalizeRules(nextRules);
+  state.activeRuleId = state.rules[0]?.id || '';
+  await persistRules(`已删除标签：${toDelete.label || toDelete.id}`);
+  renderStatus('标签规则已删除', 'warn');
+});
+
 debugModeCheckbox?.addEventListener('change', async () => {
   state.debugMode = Boolean(debugModeCheckbox.checked);
   await chrome.storage.local.set({ [STORAGE_KEYS.debugMode]: state.debugMode });

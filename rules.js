@@ -21,7 +21,7 @@ export const DEFAULT_SITE_RULES = [
     },
     rootSelectors: ['.paper-content', '.post-content', 'article', 'main'],
     titleSelectors: ['h1'],
-    contentSelectors: ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img'],
+    contentSelectors: ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img', 'video'],
     exclude: {
       ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
       ancestorClassRegex:
@@ -54,7 +54,7 @@ export const DEFAULT_SITE_RULES = [
     },
     rootSelectors: ['#js_content', '.rich_media_content', 'article', 'main'],
     titleSelectors: ['#activity-name .js_title_inner', '#activity-name', '.rich_media_title'],
-    contentSelectors: ['h1', 'h2', 'h3', 'p', 'section', 'li', 'blockquote', 'pre', 'div', 'img'],
+    contentSelectors: ['h1', 'h2', 'h3', 'p', 'section', 'li', 'blockquote', 'pre', 'div', 'img', 'video'],
     exclude: {
       ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
       ancestorClassRegex:
@@ -78,6 +78,84 @@ export const DEFAULT_SITE_RULES = [
       maxChars: 80000,
     },
   },
+  {
+    id: 'zcool-article',
+    label: '站酷',
+    enabled: true,
+    match: {
+      hostSuffix: 'zcool.com.cn',
+    },
+    rootSelectors: ['.sc-1n8zbuv-0', '.workShowBox .newContent', '.workShowBox', 'article', 'main'],
+    titleSelectors: ['.titleBox .contentTitle', 'h1.contentTitle', '.titleBox h1'],
+    contentSelectors: ['h1.contentTitle', 'div.paragraph', 'div.paragraph p', 'h2', 'h3', 'li', 'blockquote', 'pre', 'img', 'video'],
+    exclude: {
+      ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
+      ancestorClassRegex:
+        '\\b(nav|header|footer|sidebar|menu|ad|advertisement|recommend|related|comment|copyright|share|toolbar|breadcrumb|author|avatar|userinfo|meta|detailFixedHead|interest-recommend)\\b',
+      textRegex:
+        '^(收藏|关注|私信|点赞|评论|分享|举报|更多|展开|收起|查看|复制|下载|购买|加购|立即|确认|取消|返回|登录|注册)$',
+    },
+    image: {
+      srcAttrs: ['data-original', 'data-src', 'src'],
+      minWidth: 120,
+      minHeight: 120,
+      rejectSrcRegex: '(avatar|icon|logo|emoji|badge|sprite|btn|button|arrow|loading|placeholder|qrcode)',
+    },
+    text: {
+      minLength: 1,
+      dedupe: true,
+      skipIfHasDescendantSelector: 'p, h1, h2, h3, li, blockquote, pre, img',
+    },
+    limits: {
+      maxBlocks: 500,
+      maxChars: 80000,
+    },
+  },
+  {
+    id: 'sspai-article',
+    label: '少数派',
+    enabled: true,
+    match: {
+      hostSuffix: 'sspai.com',
+    },
+    rootSelectors: [
+      '.article_main__content.wangEditor-txt',
+      '.article_main__content',
+      '.article_main_wrapper .article-content',
+      '.article_main_wrapper',
+      '.article-detail .article-content',
+      '.article-content',
+      '.post-content',
+      '.entry-content',
+      '.article',
+      'article',
+      'main',
+    ],
+    titleSelectors: ['#article-title', 'h1.article-title', '.article .title h1', '.title h1', '.article-header h1', 'h1'],
+    contentSelectors: ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img', 'video'],
+    exclude: {
+      ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
+      ancestorClassRegex:
+        '\\b(nav|header|footer|sidebar|menu|ad|advertisement|recommend|related|comment|copyright|share|toolbar|breadcrumb|author|userinfo|meta|tag|license|statement)\\b',
+      textRegex:
+        '^(收藏|关注|私信|点赞|评论|分享|举报|更多|展开|收起|查看|复制|下载|购买|加购|立即|确认|取消|返回|登录|注册)$',
+    },
+    image: {
+      srcAttrs: ['data-src', 'data-original', 'data-original-src', 'data-srcset', 'srcset', 'src'],
+      minWidth: 80,
+      minHeight: 80,
+      rejectSrcRegex: '(avatar|icon|logo|emoji|badge|sprite|btn|button|arrow|loading|placeholder|qrcode)',
+    },
+    text: {
+      minLength: 1,
+      dedupe: true,
+      skipIfHasDescendantSelector: 'p, h1, h2, h3, li, blockquote, pre, img, video',
+    },
+    limits: {
+      maxBlocks: 500,
+      maxChars: 80000,
+    },
+  },
 ];
 
 function clone(value) {
@@ -88,6 +166,19 @@ function toStringList(value, fallback) {
   if (!Array.isArray(value)) return fallback;
   const list = value.filter(item => typeof item === 'string' && item.trim()).map(item => item.trim());
   return list.length ? list : fallback;
+}
+
+function mergeStringLists(base, extra) {
+  const output = [];
+  const seen = new Set();
+  [...(Array.isArray(base) ? base : []), ...(Array.isArray(extra) ? extra : [])].forEach(item => {
+    if (typeof item !== 'string') return;
+    const value = item.trim();
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    output.push(value);
+  });
+  return output;
 }
 
 function normalizeMatch(match) {
@@ -111,7 +202,7 @@ function normalizeRule(rule) {
     match,
     rootSelectors: toStringList(rule.rootSelectors, ['article', 'main', '[role="main"]', 'body']),
     titleSelectors: toStringList(rule.titleSelectors, ['h1']),
-    contentSelectors: toStringList(rule.contentSelectors, ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img']),
+    contentSelectors: toStringList(rule.contentSelectors, ['h1', 'h2', 'h3', 'p', 'li', 'blockquote', 'pre', 'img', 'video']),
     exclude: {
       ancestorTags: toStringList(rule.exclude?.ancestorTags, ['NAV', 'HEADER', 'FOOTER', 'ASIDE']),
       ancestorClassRegex:
@@ -147,8 +238,47 @@ function normalizeRule(rule) {
 
 export function normalizeRules(inputRules) {
   const fromInput = Array.isArray(inputRules) ? inputRules : [];
-  const normalized = fromInput.map(normalizeRule).filter(Boolean);
-  return normalized.length ? normalized : clone(DEFAULT_SITE_RULES);
+  const normalizedInput = fromInput.map(normalizeRule).filter(Boolean);
+  if (!normalizedInput.length) return clone(DEFAULT_SITE_RULES);
+
+  const defaults = clone(DEFAULT_SITE_RULES);
+  const byId = new Map(normalizedInput.map(rule => [rule.id, rule]));
+  const merged = defaults.map(defaultRule => {
+    const userRule = byId.get(defaultRule.id);
+    if (!userRule) return defaultRule;
+    return {
+      ...defaultRule,
+      ...userRule,
+      match: { ...defaultRule.match, ...userRule.match },
+      rootSelectors: mergeStringLists(defaultRule.rootSelectors, userRule.rootSelectors),
+      titleSelectors: mergeStringLists(defaultRule.titleSelectors, userRule.titleSelectors),
+      contentSelectors: mergeStringLists(defaultRule.contentSelectors, userRule.contentSelectors),
+      exclude: {
+        ...defaultRule.exclude,
+        ...userRule.exclude,
+        ancestorTags: mergeStringLists(defaultRule.exclude.ancestorTags, userRule.exclude?.ancestorTags),
+      },
+      image: {
+        ...defaultRule.image,
+        ...userRule.image,
+        srcAttrs: mergeStringLists(defaultRule.image.srcAttrs, userRule.image?.srcAttrs),
+      },
+      text: {
+        ...defaultRule.text,
+        ...userRule.text,
+      },
+      limits: {
+        ...defaultRule.limits,
+        ...userRule.limits,
+      },
+    };
+  });
+  const defaultIds = new Set(defaults.map(rule => rule.id));
+  normalizedInput.forEach(rule => {
+    if (defaultIds.has(rule.id)) return;
+    merged.push(rule);
+  });
+  return merged;
 }
 
 export function getDefaultRules() {

@@ -7,7 +7,7 @@
 构建一个 Chrome 扩展，从网页中提取正文与图片并净化为可复制的 Markdown 内容，支持通过规则按站点定制提取逻辑。
 
 ## Current Status
-development (direct clip to Notion landed; next focus is Notion reliability and extractor regression tests)
+development (site-tag mode + Notion page/database flow stable; SSPAI image/title/quote compatibility fixed; footer action hierarchy updated)
 
 ## Current Features
 
@@ -15,13 +15,21 @@ development (direct clip to Notion landed; next focus is Notion reliability and 
 
 - 支持在 Side Panel 中抓取当前标签页内容并预览（点击扩展图标打开）
 - 支持复制净化后的 Markdown（标题/段落/图片）到剪贴板
-- 支持基于站点规则提取内容（当前内置小报童、微信公众号）
+- 支持基于站点规则提取内容（当前内置小报童、微信公众号、站酷、少数派）
+- 已支持内置规则自动补齐：已有本地规则的用户也会自动获得新增内置站点标签（如站酷）
 - 支持规则 JSON 可视化编辑、保存、重置与复制
+- 支持“站点标签管理”模式：用户仅维护标签名称与该标签对应的规则 JSON 内容（增删改）
+- 引用内容已按真实 `blockquote` 语义块处理（不依赖 CSS 伪元素）
+- 已支持将以 `>` 开头的段落（如少数派常见引用写法）识别为引用块
 - 支持调试模式，展示命中规则、候选数量、过滤统计等信息
 - 支持针对微信公众号的惰性加载预滚动与图片等待策略
 - Side Panel UI 已升级状态反馈：显示抓取状态与提取块数，并优化可读性与滚动视觉
 - 已补充 `http/https` host 权限，保证 Side Panel 抓取可访问页面内容
 - 支持预览区“逐张复制图片”（二进制写入剪贴板）以提升公众号图片可用性
+- GIF 单图复制失败时会自动降级为“复制链接”，并支持预览区一键复制媒体链接
+- 支持提取 `video` 资源为链接块（预览/复制/导出/Notion 发送均保留视频链接）
+- 发送 Notion 时：视频链接会写入 `embed` block；图片上传失败会回退为 `image.external`
+- 图片抓取支持“页面上下文回退”：当扩展上下文直连被防盗链拦截（如少数派 CDN 403）时，自动回退到原页面上下文读取
 - 支持导出 Notion 导入包（zip）：`article.md + images/*` 本地相对路径
 - 支持 Notion 直连剪藏：Side Panel 内配置 Integration Token 与 Parent Page，直接创建页面并写入文字与图片
 - 支持 Notion 连接辅助：可在 Side Panel 内验证连接并自动发现可写目标（页面/数据库），点选后自动填充 ID
@@ -32,6 +40,7 @@ development (direct clip to Notion landed; next focus is Notion reliability and 
 - 已优化多图性能：公众号图片本地化改为并发处理，Notion 图片上传改为限流并发并展示进度
 - 已修复 Side Panel 打开后切换标签页时 `site badges` 高亮不刷新的问题（监听 tab 激活/更新）
 - Side Panel UI 模块已重整：Header 去品牌、Footer 改为结果态多操作交互（重新抓取/复制 Markdown/导出/发送 Notion）
+- Footer 结果态按钮层级已调整：重新抓取/复制 Markdown/导出 Notion 包统一为圆形图标按钮（hover 显示文案），发送到 Notion 保持主文案按钮
 - 抓取前会拦截 `chrome://` 等不可注入页面，提示切换到普通网页（http/https）
 - 新增悬浮 `调试模式` 按钮，可注入虚拟标题、正文与占位图，便于在任意页面调试 UI
 - Side Panel 交互图标已统一到本地 `icons.js` 的 Lucide 风格 SVG 集合，避免混用零散图标
@@ -42,24 +51,25 @@ development (direct clip to Notion landed; next focus is Notion reliability and 
 - 文本内超链接已支持保留：预览可点击，发送 Notion 时写入 `rich_text.link`
 - 列表项已支持标记符号保留（如 `•`、`1.`、`a.`、`i.`），预览与 Notion 保持一致
 - 已修复列表重复抓取（避免 `li` 与其内部 `p` 重复入库），并改为 Notion 原生列表块写入
+- 已修复少数派标题提取：支持 `#article-title`，并允许标题位于内容 root 内部
 - 已新增最小自动回归脚本：`npm run test:regression`（覆盖小报童/公众号/通用回退 + Notion 映射）
 
 ## Development Focus
 
 当前开发重点。
 
-1. 继续处理公众号图片抓取问题（抓取稳定性、图片可用性与后续导入路径）
-2. 完善 Notion 直连流程（错误提示、配置体验、失败重试与批量稳定性；已修复标题重复，并支持数据库写入）
-3. 补充回归测试与样例页面验证流程
+1. 完善 Notion 直连稳定性（上传重试、失败统计、token 安全存储）
+2. 收敛 `extractor.js` 与 `rules.js` 的双份默认规则定义，减少维护成本
+3. 继续补充站点规则模板与真实页面回归样例
 
 ## Next Session
 
 下一会话建议按以下顺序继续：
 
 1. 先执行 `执行【上下文同步】`，确认当前分支与任务边界
-2. 按 `docs/regression-cases.md` 执行最小回归案例（重点 Case 2/3/4/5）
-3. 用真实 Notion 直连验证“页面模式/数据库模式”写入行为（含标题字段自动识别）
-4. 下一高优先级：增强 Notion 目标选择体验（可选“显示全部”、搜索过滤、分组计数）
+2. 用真实页面验收少数派（标题/图片/引用）与站酷抓取稳定性
+3. 按 `docs/regression-cases.md` 执行最小回归案例（重点 Case 2/3/4/5）
+4. 开始处理 `docs/todo.md` 高优先级项：Notion 上传稳定性与规则定义去重
 
 ## Key Files
 

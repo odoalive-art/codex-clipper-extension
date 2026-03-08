@@ -594,3 +594,216 @@ Notes:
   - `docs/dev-log.md`
 - Notes:
   - 重启插件后，若 Token/目标未变化，通常无需再次点击“自动发现目标”即可直接发送。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 新增站点标签可视化规则配置（替代纯 JSON 手改）。
+- Changes:
+  - 更新 `sidepanel.html`：规则配置区新增可视化编辑表单（规则选择、标签名、匹配类型与匹配值、核心选择器、启用开关）
+  - 更新 `sidepanel.js`：新增规则可视化编辑逻辑（新增/保存/删除规则），并与 JSON 文本双向同步
+  - 更新 `sidepanel.js`：支持点击顶部 `site badges` 直接载入对应规则到编辑器
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 可视化编辑优先覆盖常用字段，复杂字段仍可通过 JSON 直接维护。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 规则区进一步简化为“站点标签管理”模式。
+- Changes:
+  - 更新 `sidepanel.html`：移除匹配类型/匹配值/selectors 等底层字段输入，仅保留“标签 + 规则(JSON)”维护
+  - 更新 `sidepanel.js`：规则编辑逻辑改为“单标签规则 JSON 编辑”，保存时自动归并并做结构校验
+  - 更新 `sidepanel.js`：保留站点标签选择、新增、保存、删除，并支持点击顶部标签快速载入
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 当前不引入 DSL 与 AI 自动生成，规则模板仅作为文案参考，用户手动填写 JSON。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 增加站酷（ZCOOL）默认抓取规则。
+- Changes:
+  - 更新 `rules.js`：新增 `zcool.com.cn` 默认规则（root/content/exclude/image/text/limits）
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `rules.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 该规则按已验证场景配置，后续可根据真实页面样本继续微调选择器。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 修复站酷标签缺失并增强站酷抓取命中。
+- Changes:
+  - 更新 `rules.js`：`normalizeRules` 增加“缺失内置规则自动补齐”逻辑（保留用户自定义规则）
+  - 更新 `rules.js`：站酷规则选择器改为贴合实际结构（`titleBox/contentTitle` + `sc-1n8zbuv-0` + `paragraph`）
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `rules.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 该修复可让已有本地规则配置用户也自动看到“站酷”标签，并提升正文抓取准确性。
+
+### 2026-03-07 (Asia/Shanghai)
+- Author: Codex
+- Summary: 增强媒体处理：GIF 复制降级 + 视频链接支持。
+- Changes:
+  - 更新 `sidepanel.js`：单图复制失败时对 GIF 自动降级为“复制链接”
+  - 更新 `sidepanel.js`：媒体卡片新增“复制链接”按钮
+  - 更新 `sidepanel.js`：`video` 块在预览/复制/导出/Notion 发送中按链接处理
+  - 更新 `extractor.js`：支持提取 `video` 元素（含 `source[src]`）为 `video` 块
+  - 更新 `rules.js`：默认 `contentSelectors` 扩展包含 `video`
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `extractor.js`
+  - `rules.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 当前视频以链接方式保留，不做二进制复制或上传。
+
+### 2026-03-08 (Asia/Shanghai)
+- Author: Codex
+- Summary: 修复 Notion 直连媒体降级策略（避免仅文本链接）。
+- Changes:
+  - 更新 `sidepanel.js`：视频块发送 Notion 改为 `embed` block（不再写成纯文本）
+  - 更新 `sidepanel.js`：图片上传失败时优先回退为 `image.external` block
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 在目标站点允许外链访问时，Notion 内会直接渲染嵌入；否则仍可能回退为链接文本。
+
+### 2026-03-08 (Asia/Shanghai)
+- Author: Codex
+- Summary: 新增少数派（SSPAI）默认抓取规则。
+- Changes:
+  - 更新 `rules.js`：新增 `sspai.com` 默认规则（title/root/content/exclude/image/text/limits）
+  - 更新 `extractor.js`：补充少数派兜底规则与 `SUPPORTED_SITES` 清单
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `rules.js`
+  - `extractor.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 规则会通过内置补齐机制自动出现在已有用户配置中。
+
+### 2026-03-08 (Asia/Shanghai)
+- Author: Codex
+- Summary: 修复少数派抓取细节并增强引用语义保留。
+- Changes:
+  - 更新 `rules.js` / `extractor.js`：少数派规则补强标题选择器与图片源属性（含 `srcset`/`data-original-src`）
+  - 更新 `extractor.js`：`blockquote` 输出类型从普通段落升级为 `quote`
+  - 更新 `sidepanel.js` / `notion-blocks.js`：预览、复制、导出、Notion 写入链路支持 `quote` 语义
+  - 更新 `sidepanel.js`：图片预览增加 `referrerPolicy=no-referrer`，缓解部分外链防盗链场景
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `rules.js`
+  - `extractor.js`
+  - `sidepanel.js`
+  - `notion-blocks.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - `blockquote::after` 这类伪元素样式不会被提取；改为保留引用语义块来稳定跨站表现。
+
+### 2026-03-08 (Asia/Shanghai)
+- Author: Codex
+- Summary: 修复少数派文章图片与标题提取稳定性。
+- Changes:
+  - 更新 `sidepanel.js`：图片抓取改为双通道（扩展上下文直连失败时，回退到页面上下文读取）
+  - 更新 `sidepanel.js`：记录最近抓取标签页信息，用于后续图片回退读取
+  - 更新 `sidepanel.js`：单图复制复用统一图片抓取逻辑，兼容 `data:`/`blob:`
+  - 更新 `rules.js` / `extractor.js`：少数派规则补充 `#article-title` 与更精确 root 选择器
+  - 更新 `rules.js` / `extractor.js`：内置规则与同 ID 本地规则改为字段并集合并，避免旧配置缺失新字段
+  - 更新 `extractor.js`：标题提取不再要求“必须在 root 外部”，统一先提取再去重
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `rules.js`
+  - `extractor.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已本地验证少数派样例 `https://sspai.com/post/106372`：图片节点可提取（16 张），标题可提取为 `h1`。
+  - 回归测试 `npm run test:regression` 全通过。
+
+### 2026-03-08 (Asia/Shanghai)
+- Author: Codex
+- Summary: 增强引用识别，兼容少数派 `>` 段落写法。
+- Changes:
+  - 更新 `extractor.js`：新增“quote-like paragraph”识别，将整段以 `>` 开头的 `p` 转为 `quote`
+  - 保持现有 `blockquote` 语义输出不变，与预览/复制/Notion 链路兼容
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `extractor.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 回归测试 `npm run test:regression` 全通过。
+
+### 2026-03-08 (Asia/Shanghai)
+- Author: Codex
+- Summary: 调整 Footer 按钮层级与交互样式。
+- Changes:
+  - 更新 `sidepanel.html`：结果态下“重新抓取/复制 Markdown/导出 Notion 包”统一为圆形图标按钮
+  - 更新 `sidepanel.html`：上述圆形按钮仅在 hover/focus 时于上方显示功能文案
+  - 更新 `sidepanel.html`：`发送到 Notion` 改为结果态主文案按钮（保留图标 + 文案）
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - JS 逻辑无需改动，按钮状态更新函数可直接复用。
+
+### 2026-03-08 (Asia/Shanghai)
+- Author: Codex
+- Summary: 会话收尾：撤销临时图标替换并完成交接文档更新。
+- Changes:
+  - 回退 `发送到 Notion` 的临时自定义图标，恢复默认 `send` 图标
+  - 按“结束会话”更新 `docs/ai-context.md` 的状态、开发重点与下一会话建议
+  - 追加本条会话收尾记录
+- Files Modified:
+  - `icons.js`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 当前线程已完成少数派抓取修复、Footer 按钮层级调整与文档同步，可进入下一轮规则扩展/Notion 稳定性优化。

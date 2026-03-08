@@ -222,7 +222,25 @@
       bottom: 8px;
       backdrop-filter: blur(6px);
     }
+    .copy-link-btn {
+      margin-top: 0;
+      border: 1px solid rgba(17, 24, 39, 0.15);
+      background: rgba(255, 255, 255, 0.9);
+      color: #2f3747;
+      border-radius: 4px;
+      font-size: 11px;
+      padding: 5px 8px;
+      cursor: pointer;
+      position: absolute;
+      left: 8px;
+      bottom: 8px;
+      backdrop-filter: blur(6px);
+    }
     .copy-image-btn:disabled {
+      opacity: 0.7;
+      cursor: default;
+    }
+    .copy-link-btn:disabled {
       opacity: 0.7;
       cursor: default;
     }
@@ -322,7 +340,7 @@
       padding: 5px 8px;
       cursor: pointer;
     }
-    #rulesInput {
+    #ruleContentInput {
       width: 100%;
       min-height: 120px;
       max-height: 240px;
@@ -355,7 +373,8 @@
       gap: 10px;
     }
     .footer.has-results {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+      grid-template-columns: auto auto auto minmax(0, 1fr);
+      align-items: center;
     }
     .btn {
       padding: 12px 14px;
@@ -396,6 +415,13 @@
       color: #fff;
       display: none;
     }
+    .btn-send-main {
+      display: none;
+      background: var(--primary);
+      color: #fff;
+      justify-self: stretch;
+      width: 100%;
+    }
     .btn-icon {
       width: 40px;
       min-width: 40px;
@@ -408,12 +434,32 @@
       display: none;
       position: relative;
     }
-    .btn-icon::after {
+    .footer.has-results #grabBtn,
+    .footer.has-results #copyBtn,
+    .footer.has-results #exportNotionBtn {
+      width: 40px;
+      min-width: 40px;
+      min-height: 40px;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid #d7e1f7;
+      background: #eef3ff;
+      color: #1e3a8a;
+      position: relative;
+    }
+    .footer.has-results #grabBtn .btn-text,
+    .footer.has-results #copyBtn .btn-text,
+    .footer.has-results #exportNotionBtn .btn-text {
+      display: none;
+    }
+    .footer.has-results #grabBtn::after,
+    .footer.has-results #copyBtn::after,
+    .footer.has-results #exportNotionBtn::after {
       content: attr(data-tooltip);
       position: absolute;
-      right: 46px;
-      top: 50%;
-      transform: translateY(-50%);
+      left: 50%;
+      bottom: calc(100% + 8px);
+      transform: translateX(-50%);
       background: #111827;
       color: #fff;
       font-size: 11px;
@@ -424,15 +470,20 @@
       pointer-events: none;
       transition: opacity 0.18s ease;
     }
-    .btn-icon:hover::after,
-    .btn-icon:focus-visible::after {
+    .footer.has-results #grabBtn:hover::after,
+    .footer.has-results #copyBtn:hover::after,
+    .footer.has-results #exportNotionBtn:hover::after,
+    .footer.has-results #grabBtn:focus-visible::after,
+    .footer.has-results #copyBtn:focus-visible::after,
+    .footer.has-results #exportNotionBtn:focus-visible::after {
       opacity: 1;
     }
     .btn-icon .btn-text {
       display: none;
     }
     .footer.has-results .btn-secondary,
-    .footer.has-results .btn-icon {
+    .footer.has-results .btn-icon,
+    .footer.has-results .btn-send-main {
       display: flex;
     }
     .btn:disabled {
@@ -488,13 +539,30 @@
 
     <div class="tools">
       <details>
-        <summary>规则配置（JSON）</summary>
-        <textarea id="rulesInput"></textarea>
-        <div class="tool-row">
-          <button id="saveRulesBtn" class="mini-btn">保存规则</button>
-          <button id="resetRulesBtn" class="mini-btn">恢复默认</button>
-          <button id="copyRulesBtn" class="mini-btn">复制JSON</button>
+        <summary>站点标签管理</summary>
+        <div class="tool-row stretch">
+          <label for="ruleEditorSelect">站点标签</label>
+          <select id="ruleEditorSelect">
+            <option value="">请选择规则</option>
+          </select>
         </div>
+        <div class="tool-row stretch">
+          <label for="ruleLabelInput">标签名称</label>
+          <input id="ruleLabelInput" type="text" placeholder="例如：我的博客">
+        </div>
+        <div class="tool-row stretch">
+          <label for="ruleContentInput">规则（JSON）</label>
+          <textarea id="ruleContentInput" placeholder='{"match":{"hostSuffix":"example.com"},"rootSelectors":["article","main"],"contentSelectors":["h1","h2","p","img"]}'></textarea>
+        </div>
+        <div class="tool-row">
+          <button id="createRuleBtn" class="mini-btn">新增标签规则</button>
+          <button id="saveRuleEditorBtn" class="mini-btn">保存当前标签</button>
+          <button id="deleteRuleBtn" class="mini-btn">删除当前标签</button>
+        </div>
+        <div class="tool-hint">规则模板（手动参考）：
+          <br>{ "match": { "hostSuffix": "example.com" }, "rootSelectors": ["article","main"], "titleSelectors": ["h1"], "contentSelectors": ["h1","h2","h3","p","li","blockquote","pre","img"] }
+        </div>
+        <div id="ruleEditorStatus" class="inline-status"></div>
       </details>
       <details>
         <summary>调试信息</summary>
@@ -537,16 +605,16 @@
     </div>
 
     <div class="footer">
-      <button id="grabBtn" class="btn btn-primary">
+      <button id="grabBtn" class="btn btn-primary" aria-label="重新抓取" data-tooltip="重新抓取">
         <span class="btn-text">开始净化</span>
       </button>
-      <button id="copyBtn" class="btn btn-secondary">
+      <button id="copyBtn" class="btn btn-secondary" aria-label="复制 Markdown" data-tooltip="复制 Markdown">
         <span class="btn-text">复制 Markdown</span>
       </button>
       <button id="exportNotionBtn" class="btn btn-icon" aria-label="导出 Notion 包" data-tooltip="导出 Notion 包">
         <span class="btn-text">导出 Notion 包</span>
       </button>
-      <button id="clipToNotionBtn" class="btn btn-icon" aria-label="发送到 Notion" data-tooltip="发送到 Notion">
+      <button id="clipToNotionBtn" class="btn btn-send-main" aria-label="发送到 Notion">
         <span class="btn-text">发送到 Notion</span>
       </button>
     </div>

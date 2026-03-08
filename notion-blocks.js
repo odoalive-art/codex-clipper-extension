@@ -236,7 +236,15 @@ export function textBlockToNotion(blockType, content, segments = [], baseHref = 
       ]);
   if (!richTextChunks.length) return [];
   const blockName =
-    blockType === 'h1' ? 'heading_1' : blockType === 'h2' ? 'heading_2' : blockType === 'h3' ? 'heading_3' : 'paragraph';
+    blockType === 'h1'
+      ? 'heading_1'
+      : blockType === 'h2'
+        ? 'heading_2'
+        : blockType === 'h3'
+          ? 'heading_3'
+          : blockType === 'quote'
+            ? 'quote'
+            : 'paragraph';
 
   return richTextChunks.map(richText => ({
     object: 'block',
