@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Clipper Studio 设置</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --border: #d9e1f2;
+      --text-main: #111827;
+      --text-sub: #64748b;
+      --primary: #111827;
+      --ok: #15803d;
+      --warn: #b45309;
+      --err: #b91c1c;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+    }
+
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px 16px 28px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .hero {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .hero p {
+      margin: 6px 0 0;
+      font-size: 13px;
+      color: var(--text-sub);
+      line-height: 1.5;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .row {
+      display: grid;
+      gap: 4px;
+    }
+
+    .row label {
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    input[type="text"],
+    input[type="password"],
+    select,
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      min-height: 34px;
+      padding: 7px 10px;
+      font-size: 13px;
+      color: var(--text-main);
+      background: #fff;
+    }
+
+    textarea {
+      min-height: 140px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      line-height: 1.45;
+      tab-size: 2;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: #1f2937;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 10px;
+      cursor: pointer;
+    }
+
+    .btn.primary {
+      border-color: #1d4ed8;
+      background: #1d4ed8;
+      color: #fff;
+    }
+
+    .inline-status {
+      min-height: 18px;
+      font-size: 12px;
+      color: var(--text-sub);
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .inline-status.ok { color: var(--ok); }
+    .inline-status.warn { color: var(--warn); }
+    .inline-status.error { color: var(--err); }
+
+    .hint {
+      font-size: 12px;
+      color: var(--text-sub);
+      line-height: 1.5;
+    }
+
+    .switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>Clipper Studio 设置</h1>
+      <p>侧栏只负责内容抓取与导出。站点规则、调试与 Notion 配置在这里集中管理。</p>
+    </section>
+
+    <section class="card">
+      <h2>站点标签管理</h2>
+      <div class="row">
+        <label for="ruleEditorSelect">站点标签</label>
+        <select id="ruleEditorSelect">
+          <option value="">请选择规则</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="ruleLabelInput">标签名称</label>
+        <input id="ruleLabelInput" type="text" placeholder="例如：我的博客">
+      </div>
+      <div class="row">
+        <label for="ruleContentInput">规则（JSON）</label>
+        <textarea id="ruleContentInput" placeholder='{"match":{"hostSuffix":"example.com"},"rootSelectors":["article","main"],"contentSelectors":["h1","h2","p","img"]}'></textarea>
+      </div>
+      <div class="actions">
+        <button id="createRuleBtn" class="btn">新增标签规则</button>
+        <button id="saveRuleEditorBtn" class="btn primary">保存当前标签</button>
+        <button id="deleteRuleBtn" class="btn">删除当前标签</button>
+      </div>
+      <div class="hint">模板参考：{ "match": { "hostSuffix": "example.com" }, "rootSelectors": ["article","main"], "titleSelectors": ["h1"], "contentSelectors": ["h1","h2","h3","p","li","blockquote","pre","img"] }</div>
+      <div id="ruleEditorStatus" class="inline-status"></div>
+    </section>
+
+    <section class="card">
+      <h2>调试</h2>
+      <label class="switch"><input id="debugModeCheckbox" type="checkbox"> 启用抓取调试信息</label>
+      <div id="debugStatus" class="inline-status"></div>
+    </section>
+
+    <section class="card">
+      <h2>Notion 直连</h2>
+      <div class="row">
+        <label for="notionTokenInput">Integration Token</label>
+        <input id="notionTokenInput" type="password" placeholder="ntn_..." autocomplete="off">
+      </div>
+      <div class="row">
+        <label for="notionParentPageInput">Parent Page ID / URL</label>
+        <input id="notionParentPageInput" type="text" placeholder="页面或数据库链接 / ID">
+      </div>
+      <div class="row">
+        <label for="notionTargetTypeSelect">写入目标类型</label>
+        <select id="notionTargetTypeSelect">
+          <option value="page">页面（创建子页面）</option>
+          <option value="database">数据库（创建记录）</option>
+        </select>
+      </div>
+      <div class="actions">
+        <button id="saveNotionConfigBtn" class="btn primary">保存 Notion 配置</button>
+        <button id="notionVerifyBtn" class="btn">验证连接</button>
+        <button id="notionDiscoverPagesBtn" class="btn">自动发现目标</button>
+      </div>
+      <div class="row">
+        <label for="notionPageSelect">可写目标（页面/数据库，选择后自动填充上方 ID）</label>
+        <select id="notionPageSelect">
+          <option value="">请先点击“自动发现目标”</option>
+        </select>
+      </div>
+      <div id="notionConfigStatus" class="inline-status"></div>
+      <div class="hint">请先在 Notion 把目标页面分享给你的 Integration（Add connections）。</div>
+    </section>
+  </div>
+  <script type="module" src="settings.js"></script>
+</body>
+</html>

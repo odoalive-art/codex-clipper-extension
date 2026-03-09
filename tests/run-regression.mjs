@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 import { extractPageContent } from '../extractor.js';
 import { codeBlockToNotion, listBlockToNotion, textBlockToNotion } from '../notion-blocks.js';
+import { getDefaultRules } from '../rules.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const defaultRules = getDefaultRules();
 
 const results = [];
 
@@ -78,7 +80,9 @@ async function loadFixture(name) {
 
 await runCase('extractor/xiaobot/code-list-link', async () => {
   const html = await loadFixture('xiaobot-code-list-link.html');
-  const payload = await withDom(html, 'https://foo.xiaobot.net/post/1', () => extractPageContent({ debug: true }));
+  const payload = await withDom(html, 'https://foo.xiaobot.net/post/1', () =>
+    extractPageContent({ rules: defaultRules, debug: true })
+  );
 
   const blocks = Array.isArray(payload.blocks) ? payload.blocks : [];
   assert(blocks.length > 0, 'blocks should not be empty');
@@ -106,7 +110,9 @@ await runCase('extractor/xiaobot/code-list-link', async () => {
 
 await runCase('extractor/fallback-generic', async () => {
   const html = await loadFixture('fallback-generic.html');
-  const payload = await withDom(html, 'https://example.org/post/1', () => extractPageContent({ debug: true }));
+  const payload = await withDom(html, 'https://example.org/post/1', () =>
+    extractPageContent({ rules: defaultRules, debug: true })
+  );
   const blocks = Array.isArray(payload.blocks) ? payload.blocks : [];
   assert(blocks.some(item => item.type === 'h1' && item.content === 'Fallback 标题'), 'fallback h1 missing');
   assert(blocks.some(item => item.type === 'p' && String(item.content || '').includes('Fallback 正文段落')), 'fallback paragraph missing');
@@ -115,7 +121,9 @@ await runCase('extractor/fallback-generic', async () => {
 
 await runCase('extractor/wechat-basic', async () => {
   const html = await loadFixture('wechat-basic.html');
-  const payload = await withDom(html, 'https://mp.weixin.qq.com/s/demo', () => extractPageContent({ debug: true }));
+  const payload = await withDom(html, 'https://mp.weixin.qq.com/s/demo', () =>
+    extractPageContent({ rules: defaultRules, debug: true })
+  );
   const blocks = Array.isArray(payload.blocks) ? payload.blocks : [];
   assert(payload?.debug?.matchedRuleId === 'wechat-mp', `expected wechat-mp rule, got ${payload?.debug?.matchedRuleId}`);
   assert(blocks.some(item => item.type === 'h1' && item.content === '公众号标题'), 'wechat title missing');

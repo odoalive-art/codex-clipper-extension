@@ -95,6 +95,26 @@
       justify-content: space-between;
       align-items: center;
     }
+    .meta-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .settings-link {
+      border: 1px solid #d8d8de;
+      background: #fff;
+      color: #1f2937;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 10px;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .settings-link:hover {
+      border-color: #c8d3ec;
+      background: #f8fbff;
+    }
     .chip {
       font-size: 11px;
       line-height: 1;
@@ -248,122 +268,6 @@
     .msg.warn { color: #ff9500; }
     .msg.error { color: #ff3b30; }
 
-    .tools {
-      border-top: 0.5px solid var(--border);
-      background: rgba(248, 250, 255, 0.72);
-      padding: 8px 12px;
-      display: grid;
-      gap: 8px;
-    }
-    details {
-      border: 1px solid #e6e9f2;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.7);
-      padding: 8px 10px;
-    }
-    summary {
-      cursor: pointer;
-      font-size: 12px;
-      color: #3a3a3c;
-      font-weight: 600;
-    }
-    .tool-row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      margin-top: 8px;
-      font-size: 12px;
-      color: #3a3a3c;
-    }
-    .tool-row label {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      line-height: 1;
-    }
-    .tool-row input[type="checkbox"] {
-      margin: 0;
-    }
-    .tool-row.stretch {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-    .tool-row.stretch label {
-      width: 100%;
-      display: block;
-      color: #475569;
-      margin-bottom: 4px;
-    }
-    .tool-row.stretch input[type="password"],
-    .tool-row.stretch input[type="text"] {
-      width: 100%;
-      box-sizing: border-box;
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      min-height: 30px;
-      padding: 6px 8px;
-      font-size: 12px;
-      color: #111827;
-      background: #fff;
-    }
-    .tool-hint {
-      margin-top: 6px;
-      color: #64748b;
-      font-size: 11px;
-      line-height: 1.45;
-    }
-    .tool-row select {
-      width: 100%;
-      box-sizing: border-box;
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      min-height: 30px;
-      padding: 6px 8px;
-      font-size: 12px;
-      color: #111827;
-      background: #fff;
-    }
-    .inline-status {
-      margin-top: 6px;
-      color: #64748b;
-      font-size: 11px;
-      line-height: 1.4;
-      min-height: 16px;
-      word-break: break-word;
-    }
-    .mini-btn {
-      border: 1px solid #d8d8de;
-      background: #fff;
-      color: #3a3a3c;
-      border-radius: 4px;
-      font-size: 11px;
-      padding: 5px 8px;
-      cursor: pointer;
-    }
-    #ruleContentInput {
-      width: 100%;
-      min-height: 120px;
-      max-height: 240px;
-      border: 1px solid #e5e5ec;
-      border-radius: 4px;
-      font-family: ui-monospace, Menlo, monospace;
-      font-size: 11px;
-      padding: 8px;
-      box-sizing: border-box;
-      resize: vertical;
-      margin-top: 8px;
-    }
-    #debugOutput {
-      margin-top: 8px;
-      font-family: ui-monospace, Menlo, monospace;
-      font-size: 11px;
-      max-height: 100px;
-      overflow: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-      color: #3a3a3c;
-    }
-
     .footer {
       padding: 12px 12px;
       background: rgba(255, 255, 255, 0.95);
@@ -491,38 +395,6 @@
       opacity: 0.7;
     }
     .btn:active { transform: scale(0.96); opacity: 0.8; }
-    .debug-fab {
-      position: absolute;
-      right: 12px;
-      bottom: 72px;
-      z-index: 20;
-      border: none;
-      border-radius: 999px;
-      background: rgba(19, 25, 35, 0.94);
-      color: #fff;
-      padding: 10px 14px;
-      min-height: 38px;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      box-shadow: 0 14px 24px rgba(19, 25, 35, 0.28);
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.01em;
-      transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
-    }
-    .debug-fab:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 18px 28px rgba(19, 25, 35, 0.34);
-    }
-    .debug-fab:active {
-      transform: translateY(0);
-    }
-    .debug-fab .icon {
-      width: 15px;
-      height: 15px;
-    }
   </style>
 </head>
 <body>
@@ -531,78 +403,14 @@
       <div id="siteBadges" class="site-badges"></div>
       <div class="meta">
         <span id="statusChip" class="chip">状态：就绪</span>
-        <span id="countChip" class="chip">块数：0</span>
+        <div class="meta-right">
+          <span id="countChip" class="chip">块数：0</span>
+          <button id="openSettingsBtn" class="settings-link" type="button">设置</button>
+        </div>
       </div>
     </div>
 
     <div id="preview" spellcheck="false"></div>
-
-    <div class="tools">
-      <details>
-        <summary>站点标签管理</summary>
-        <div class="tool-row stretch">
-          <label for="ruleEditorSelect">站点标签</label>
-          <select id="ruleEditorSelect">
-            <option value="">请选择规则</option>
-          </select>
-        </div>
-        <div class="tool-row stretch">
-          <label for="ruleLabelInput">标签名称</label>
-          <input id="ruleLabelInput" type="text" placeholder="例如：我的博客">
-        </div>
-        <div class="tool-row stretch">
-          <label for="ruleContentInput">规则（JSON）</label>
-          <textarea id="ruleContentInput" placeholder='{"match":{"hostSuffix":"example.com"},"rootSelectors":["article","main"],"contentSelectors":["h1","h2","p","img"]}'></textarea>
-        </div>
-        <div class="tool-row">
-          <button id="createRuleBtn" class="mini-btn">新增标签规则</button>
-          <button id="saveRuleEditorBtn" class="mini-btn">保存当前标签</button>
-          <button id="deleteRuleBtn" class="mini-btn">删除当前标签</button>
-        </div>
-        <div class="tool-hint">规则模板（手动参考）：
-          <br>{ "match": { "hostSuffix": "example.com" }, "rootSelectors": ["article","main"], "titleSelectors": ["h1"], "contentSelectors": ["h1","h2","h3","p","li","blockquote","pre","img"] }
-        </div>
-        <div id="ruleEditorStatus" class="inline-status"></div>
-      </details>
-      <details>
-        <summary>调试信息</summary>
-        <div class="tool-row">
-          <label><input id="debugModeCheckbox" type="checkbox" checked> 启用调试</label>
-        </div>
-        <pre id="debugOutput"></pre>
-      </details>
-      <details>
-        <summary>Notion 直连</summary>
-        <div class="tool-row stretch">
-          <label for="notionTokenInput">Integration Token</label>
-          <input id="notionTokenInput" type="password" placeholder="ntn_..." autocomplete="off">
-        </div>
-        <div class="tool-row stretch">
-          <label for="notionParentPageInput">Parent Page ID / URL</label>
-          <input id="notionParentPageInput" type="text" placeholder="页面链接或 ID">
-        </div>
-        <div class="tool-row stretch">
-          <label for="notionTargetTypeSelect">写入目标类型</label>
-          <select id="notionTargetTypeSelect">
-            <option value="page">页面（创建子页面）</option>
-            <option value="database">数据库（创建记录）</option>
-          </select>
-        </div>
-        <div class="tool-row">
-          <button id="saveNotionConfigBtn" class="mini-btn">保存 Notion 配置</button>
-          <button id="notionVerifyBtn" class="mini-btn">验证连接</button>
-          <button id="notionDiscoverPagesBtn" class="mini-btn">自动发现目标</button>
-        </div>
-        <div class="tool-row stretch">
-          <label for="notionPageSelect">可写目标（页面/数据库，选择后自动填充上方 ID）</label>
-          <select id="notionPageSelect">
-            <option value="">请先点击“自动发现目标”</option>
-          </select>
-        </div>
-        <div id="notionConfigStatus" class="inline-status"></div>
-        <div class="tool-hint">请先在 Notion 把目标页面分享给你的 Integration（Add connections）。</div>
-      </details>
-    </div>
 
     <div class="footer">
       <button id="grabBtn" class="btn btn-primary" aria-label="重新抓取" data-tooltip="重新抓取">
@@ -618,9 +426,6 @@
         <span class="btn-text">发送到 Notion</span>
       </button>
     </div>
-    <button id="debugMockBtn" class="debug-fab" type="button">
-      <span>调试模式</span>
-    </button>
   </div>
   <script type="module" src="sidepanel.js"></script>
 </body>

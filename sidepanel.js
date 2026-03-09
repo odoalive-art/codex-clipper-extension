@@ -25,6 +25,7 @@ const debugOutput = document.getElementById('debugOutput');
 const debugModeCheckbox = document.getElementById('debugModeCheckbox');
 const statusChip = document.getElementById('statusChip');
 const countChip = document.getElementById('countChip');
+const openSettingsBtn = document.getElementById('openSettingsBtn');
 const exportNotionBtn = document.getElementById('exportNotionBtn');
 const clipToNotionBtn = document.getElementById('clipToNotionBtn');
 const notionTokenInput = document.getElementById('notionTokenInput');
@@ -120,10 +121,12 @@ const DEBUG_MOCK_PAYLOAD = {
 };
 
 function setBtn(btn, icon, label) {
+  if (!btn) return;
   btn.innerHTML = `${renderIcon(icon)}<span class="btn-text">${label}</span>`;
 }
 
 function setIconOnlyBtn(btn, icon, label = '') {
+  if (!btn) return;
   btn.innerHTML = `${renderIcon(icon)}${label ? `<span class="btn-text">${label}</span>` : ''}`;
 }
 
@@ -2218,6 +2221,10 @@ debugModeCheckbox?.addEventListener('change', async () => {
 
 debugMockBtn?.addEventListener('click', () => {
   renderDebugMock();
+});
+
+openSettingsBtn?.addEventListener('click', () => {
+  chrome.runtime.openOptionsPage();
 });
 
 setBtn(grabBtn, 'zap', '开始净化');

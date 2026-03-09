@@ -807,3 +807,42 @@ Notes:
   - `docs/dev-log.md`
 - Notes:
   - 当前线程已完成少数派抓取修复、Footer 按钮层级调整与文档同步，可进入下一轮规则扩展/Notion 稳定性优化。
+
+### 2026-03-08 17:29 (CST)
+- Author: Codex
+- Summary: 侧栏聚焦内容抓取，设置能力迁移到独立 Options Page。
+- Changes:
+  - 更新 `manifest.json`：新增 `options_ui`，注册独立设置页 `settings.html`
+  - 更新 `sidepanel.html`：移除侧栏内规则/调试/Notion 配置区，仅保留抓取预览主流程并增加“设置”入口
+  - 更新 `sidepanel.js`：新增打开设置页事件，补充按钮渲染空值保护
+  - 新增 `settings.html` / `settings.js`：承接规则管理、调试开关、Notion 配置、连接验证与目标自动发现
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `manifest.json`
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `settings.html`
+  - `settings.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已执行 `npm run test:regression`，4/4 case 通过。
+
+### 2026-03-09 10:31 (CST)
+- Author: Codex
+- Summary: 收敛默认站点规则定义，移除 `extractor.js` 内嵌默认规则。
+- Changes:
+  - 更新 `extractor.js`：删除内嵌默认站点规则，改为仅消费调用方传入规则并保留通用回退
+  - 更新 `tests/run-regression.mjs`：回归测试改为显式注入 `rules.js` 的默认规则，确保测试与运行时同源
+  - 更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`：同步记录规则单一来源与任务完成状态
+- Files Modified:
+  - `extractor.js`
+  - `tests/run-regression.mjs`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 预期收益：新增或调整默认站点规则时，只需修改 `rules.js` 一处。

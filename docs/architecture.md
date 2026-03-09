@@ -5,6 +5,8 @@
 - `manifest.json`：扩展入口与权限
 - `sidepanel.html`：Side Panel 页面
 - `sidepanel.js`：Side Panel 脚本主控层
+- `settings.html`：扩展设置页（Options Page）UI
+- `settings.js`：设置页脚本（规则管理/调试开关/Notion 配置）
 - `icons.js`：本地 Lucide 风格 SVG 图标资源
 - `background.js`：扩展后台脚本（配置点击图标打开 Side Panel）
 - `rules.js`：规则定义与归一化模块
@@ -18,13 +20,12 @@
 ## Modules
 
 - Side Panel Controller (`sidepanel.js`)
-  - 管理抓取按钮、复制按钮、规则编辑区域与调试面板
-  - 规则区采用“站点标签管理”交互：选择标签、编辑标签名、维护单条规则 JSON、增删规则
+  - 管理抓取按钮、复制按钮、导出按钮与发送 Notion 按钮
+  - 作为“内容抓取工作台”负责抓取、预览、复制、导出与发送主链路
+  - 提供“设置”入口并跳转独立设置页（`chrome.runtime.openOptionsPage`）
   - 文本块支持 `blockquote` 语义输出，预览/复制/Notion 写入保持引用结构
   - 管理导出按钮，生成 Notion 导入包（zip）
-  - 管理 Notion 直连配置（Token、写入目标 ID、目标类型），支持连接验证与可写目标（页面/数据库）自动发现
-  - 可写目标列表按当前目标类型过滤展示，并分类型持久化最近一次选中的目标 ID
-  - 启动时从本地缓存恢复可写目标列表与最近选择标题，减少重复选择成本
+  - 读取 Notion 直连配置（Token、写入目标 ID、目标类型）并执行写入
   - 调用 Notion API 创建页面/数据库记录、上传图片并写入 block
   - 媒体写入支持降级：视频 URL 写入 `embed`，图片上传失败回退为 `image.external`
   - 发送 Notion 时对正文首个 `h1` 与页面标题做去重，避免标题重复
@@ -38,7 +39,6 @@
   - 管理 Footer 结果态交互布局（抓取后显示复制、导出、发送 Notion）
   - Footer 结果态采用“3 个圆形图标次级操作 + 1 个主文案发送按钮”的层级
   - 抓取前校验标签页 URL 协议，拦截不可注入页面（如 `chrome://`）
-  - 提供悬浮调试入口，渲染本地虚拟 blocks 与 debug 数据用于 UI 调整
   - 通过 `icons.js` 注入本地 Lucide 风格图标，统一按钮与状态图标来源
   - 管理顶部状态芯片（抓取状态、提取块数）与按钮加载态反馈
   - 监听标签页激活/更新，实时刷新站点识别徽标（site badges）
@@ -47,15 +47,23 @@
   - 图片读取支持双通道：先走扩展上下文抓取，失败后回退到原页面上下文读取（用于防盗链图片）
   - 读取/保存 `chrome.storage.local` 中的规则与调试开关
   - 通过 `chrome.scripting.executeScript` 调用页面内提取函数
+- Settings Controller (`settings.js`)
+  - 承接站点标签管理（规则选择、编辑、新增、删除）
+  - 管理调试开关（`debugMode`）并持久化到 `chrome.storage.local`
+  - 管理 Notion 配置（Token、目标类型、目标 ID）与保存动作
+  - 支持 Notion 连接验证与可写目标自动发现（页面/数据库）
+  - 支持按目标类型过滤下拉候选，并持久化最近选择与候选缓存
 - Background (`background.js`)
   - 设置 `openPanelOnActionClick`，点击扩展图标直接打开 Side Panel
 - Rule Engine (`rules.js`)
   - 提供默认站点规则（小报童、微信公众号、站酷、少数派）
+  - 作为默认站点规则的唯一数据源，供 Side Panel、设置页与回归测试共用
   - 对用户输入规则做合法化与兜底归一化
   - 归一化时会自动并入缺失的内置规则，避免升级后新增站点标签缺失
   - 内置规则与本地同 ID 规则会做字段并集合并，保证新增 selector/属性可自动补齐
   - 提供规则匹配文本展示工具
 - Extraction Engine (`extractor.js`)
+  - 消费调用方传入的已归一化规则列表，未命中站点时回退通用规则
   - 基于域名选择命中规则，未命中则回退通用规则
   - 根据选择器扫描候选节点并执行噪声过滤
   - 标题提取优先按 `titleSelectors` 输出首个标题块，并通过去重避免重复标题
@@ -72,8 +80,8 @@
 ## Data Flow
 
 1. 用户点击扩展图标打开 Side Panel，并点击“开始净化”
-2. `sidepanel.js` 读取当前激活标签页并注入 `extractPageContent`
-3. `extractor.js` 在页面上下文中按规则提取 `{ blocks, debug }`
+2. `sidepanel.js` 读取当前激活标签页，将 `rules.js` 归一化后的规则一并传给 `extractPageContent`
+3. `extractor.js` 在页面上下文中按传入规则提取 `{ blocks, debug }`
 4. `sidepanel.js` 将 blocks 渲染为预览 DOM
 5. 用户可选择复制内容，或逐图复制图片二进制
 6. 用户可导出 `article.md + images/*` 的 zip 包并在 Notion 中 Import

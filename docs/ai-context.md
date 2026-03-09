@@ -7,13 +7,15 @@
 构建一个 Chrome 扩展，从网页中提取正文与图片并净化为可复制的 Markdown 内容，支持通过规则按站点定制提取逻辑。
 
 ## Current Status
-development (site-tag mode + Notion page/database flow stable; SSPAI image/title/quote compatibility fixed; footer action hierarchy updated)
+development (side panel focused on content capture; settings migrated to dedicated options page; Notion page/database flow stable)
 
 ## Current Features
 
 列出当前已经实现的主要功能。
 
 - 支持在 Side Panel 中抓取当前标签页内容并预览（点击扩展图标打开）
+- Side Panel 已精简为“内容抓取工作台”：仅保留状态、预览、抓取/复制/导出/发送操作
+- Side Panel 提供【设置】入口，点击后跳转独立设置页（Chrome Options Page）
 - 支持复制净化后的 Markdown（标题/段落/图片）到剪贴板
 - 支持基于站点规则提取内容（当前内置小报童、微信公众号、站酷、少数派）
 - 已支持内置规则自动补齐：已有本地规则的用户也会自动获得新增内置站点标签（如站酷）
@@ -29,6 +31,7 @@ development (site-tag mode + Notion page/database flow stable; SSPAI image/title
 - GIF 单图复制失败时会自动降级为“复制链接”，并支持预览区一键复制媒体链接
 - 支持提取 `video` 资源为链接块（预览/复制/导出/Notion 发送均保留视频链接）
 - 发送 Notion 时：视频链接会写入 `embed` block；图片上传失败会回退为 `image.external`
+- 独立设置页支持规则管理、调试开关、Notion Token 与写入目标配置（复用原 `chrome.storage.local`）
 - 图片抓取支持“页面上下文回退”：当扩展上下文直连被防盗链拦截（如少数派 CDN 403）时，自动回退到原页面上下文读取
 - 支持导出 Notion 导入包（zip）：`article.md + images/*` 本地相对路径
 - 支持 Notion 直连剪藏：Side Panel 内配置 Integration Token 与 Parent Page，直接创建页面并写入文字与图片
@@ -59,8 +62,8 @@ development (site-tag mode + Notion page/database flow stable; SSPAI image/title
 当前开发重点。
 
 1. 完善 Notion 直连稳定性（上传重试、失败统计、token 安全存储）
-2. 收敛 `extractor.js` 与 `rules.js` 的双份默认规则定义，减少维护成本
-3. 继续补充站点规则模板与真实页面回归样例
+2. 继续补充站点规则模板与真实页面回归样例
+3. 在设置页补充规则 JSON 校验错误定位，降低自定义规则维护成本
 
 ## Next Session
 
@@ -69,7 +72,7 @@ development (site-tag mode + Notion page/database flow stable; SSPAI image/title
 1. 先执行 `执行【上下文同步】`，确认当前分支与任务边界
 2. 用真实页面验收少数派（标题/图片/引用）与站酷抓取稳定性
 3. 按 `docs/regression-cases.md` 执行最小回归案例（重点 Case 2/3/4/5）
-4. 开始处理 `docs/todo.md` 高优先级项：Notion 上传稳定性与规则定义去重
+4. 开始处理 `docs/todo.md` 高优先级项：Notion 上传稳定性
 
 ## Key Files
 
@@ -77,8 +80,10 @@ development (site-tag mode + Notion page/database flow stable; SSPAI image/title
 
 - `manifest.json`：Chrome 扩展清单与权限声明
 - `sidepanel.html`：Side Panel UI 结构与样式
-- `sidepanel.js`：Side Panel 交互、规则管理、抓取触发、复制/导出/Notion 直连逻辑
+- `sidepanel.js`：Side Panel 抓取与预览主控（抓取、复制、导出、发送 Notion、打开设置页）
+- `settings.html`：独立设置页（Options Page）UI
+- `settings.js`：设置页交互与持久化逻辑（规则管理、调试开关、Notion 配置）
 - `background.js`：配置点击扩展图标时打开 Side Panel
-- `rules.js`：规则默认值、规范化、存储键与规则展示辅助
-- `extractor.js`：核心提取逻辑（节点过滤、图片处理、调试统计、回退规则）
+- `rules.js`：默认站点规则唯一数据源、规则规范化、存储键与规则展示辅助
+- `extractor.js`：核心提取逻辑（节点过滤、图片处理、调试统计、消费外部传入规则并保留通用回退）
 - `docs/regression-cases.md`：最小手动回归案例（代码块/链接/列表/Notion 映射）
