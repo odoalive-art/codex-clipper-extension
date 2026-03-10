@@ -7,7 +7,7 @@
 构建一个 Chrome 扩展，从网页中提取正文与图片并净化为可复制的 Markdown 内容，支持通过规则按站点定制提取逻辑。
 
 ## Current Status
-development (side panel focused on content capture; settings migrated to dedicated options page; Notion page/database flow stable; Obsidian URI + local-write dual mode delivered)
+development (side panel focused on content capture; settings migrated to dedicated options page; Notion page/database flow stable; Obsidian URI + local-write dual mode delivered; Xiaohongshu image-text capture validated)
 
 ## Current Features
 
@@ -17,7 +17,7 @@ development (side panel focused on content capture; settings migrated to dedicat
 - Side Panel 已精简为“内容抓取工作台”：仅保留状态、预览、抓取/复制/导出/发送操作
 - Side Panel 提供【设置】入口，点击后跳转独立设置页（Chrome Options Page）
 - 支持复制净化后的 Markdown（标题/段落/图片）到剪贴板
-- 支持基于站点规则提取内容（当前内置小报童、微信公众号、站酷、少数派）
+- 支持基于站点规则提取内容（当前内置小报童、微信公众号、站酷、小红书、少数派）
 - 已支持内置规则自动补齐：已有本地规则的用户也会自动获得新增内置站点标签（如站酷）
 - 支持规则 JSON 可视化编辑、保存、重置与复制
 - 支持“站点标签管理”模式：用户仅维护标签名称与该标签对应的规则 JSON 内容（增删改）
@@ -65,6 +65,7 @@ development (side panel focused on content capture; settings migrated to dedicat
 - 新增悬浮 `调试模式` 按钮，可注入虚拟标题、正文与占位图，便于在任意页面调试 UI
 - Side Panel 交互图标已统一到本地 `icons.js` 的 Lucide 风格 SVG 集合，避免混用零散图标
 - 小报童规则已补充代码块提取（`pre`）与列表/引用提取，避免代码段漏抓
+- 已新增并验收通过小红书图文规则：支持 `#detail-desc` 正文提取、`swiper` 多图顺序修正、正文内链接保留，并过滤作者卡片/评论区/相关推荐等噪声
 - Notion 直连已避免标题重复写入（页面标题与正文首个 `h1` 去重）
 - 预览区已支持代码块样式渲染（等宽字体/背景/自动换行/语言标签）
 - 发送至 Notion 时，代码块会写入 `code` block（自动语言映射，未知语言回退 plain text）
@@ -79,18 +80,18 @@ development (side panel focused on content capture; settings migrated to dedicat
 当前开发重点。
 
 1. 完善 Notion 直连稳定性（上传重试、失败统计、token 安全存储）
-2. 补一组 Obsidian 本地直写专项回归（权限失效、重名、多图、长文）
-3. 在设置页补充规则 JSON 校验错误定位，降低自定义规则维护成本
-4. 补充 Obsidian 写入链路的端到端验收清单（目录授权、URI 唤起、附件命名）
+2. 在设置页补充规则 JSON 校验错误定位，降低自定义规则维护成本
+3. 补一组 Obsidian 本地直写专项回归（权限失效、重名、多图、长文）
+4. 继续扩充站点规则样例与回归夹具，降低 DOM 变动带来的维护成本
 
 ## Next Session
 
 下一会话建议按以下顺序继续：
 
 1. 先执行 `执行【上下文同步】`，确认当前分支与任务边界
-2. 补一组 Obsidian 本地直写回归/手测清单（权限失效、重名、多图、长文）
-3. 处理 Notion 上传稳定性（重试、失败统计、token 存储安全）
-4. 实现设置页规则 JSON 校验错误定位（字段级提示）
+2. 处理 Notion 上传稳定性（重试、失败统计、token 存储安全）
+3. 实现设置页规则 JSON 校验错误定位（字段级提示）
+4. 补一组 Obsidian 本地直写回归/手测清单（权限失效、重名、多图、长文）
 
 ## Key Files
 
@@ -104,5 +105,6 @@ development (side panel focused on content capture; settings migrated to dedicat
 - `background.js`：配置点击扩展图标时打开 Side Panel
 - `rules.js`：默认站点规则唯一数据源、规则规范化、存储键与规则展示辅助
 - `extractor.js`：核心提取逻辑（节点过滤、图片处理、调试统计、消费外部传入规则并保留通用回退）
+- `tests/fixtures/xiaohongshu-note.html`：小红书图文抓取回归夹具（标题/正文/多图/去噪）
 - `docs/todo.md`：当前已新增 Obsidian 方案评估与实现待办
 - `docs/regression-cases.md`：最小手动回归案例（代码块/链接/列表/Notion 映射）

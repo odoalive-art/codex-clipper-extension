@@ -116,6 +116,53 @@ export const DEFAULT_SITE_RULES = [
     },
   },
   {
+    id: 'xiaohongshu-note',
+    label: '小红书',
+    enabled: true,
+    match: {
+      hostRegex: '(^|\\.)xiaohongshu\\.com$|(^|\\.)xhslink\\.com$',
+    },
+    rootSelectors: ['body'],
+    titleSelectors: ['#detail-title', '.note-content .note-title', '.note-scroller .note-title', '.note-container .title', 'h1.title'],
+    contentSelectors: [
+      '#detail-desc',
+      '#detail-desc .desc',
+      '#detail-desc .note-text',
+      '#detail-desc p',
+      '#detail-desc span',
+      '.swiper-slide img',
+      '.swiper-slide picture img',
+      '.swiper-slide video',
+      '.note-text',
+      '.desc',
+      '.content',
+      'img',
+      'video',
+    ],
+    exclude: {
+      ancestorTags: ['NAV', 'HEADER', 'FOOTER', 'ASIDE'],
+      ancestorClassRegex:
+        '\\b(nav|header|footer|sidebar|menu|ad|advertisement|recommend|related|comment|comments|copyright|share|toolbar|breadcrumb|author|avatar|userinfo|meta|tag|topics|location|date|time|interact|interaction|engage|action|button|goods|shop|store|product|recommendation)\\b',
+      textRegex:
+        '^(收藏|关注|私信|点赞|评论|分享|举报|更多|展开|收起|查看|复制|下载|购买|加购|立即|确认|取消|返回|登录|注册|发布于|编辑于)$',
+    },
+    image: {
+      srcAttrs: ['data-xhs-img', 'data-src', 'data-origin', 'data-original', 'srcset', 'src'],
+      minWidth: 80,
+      minHeight: 80,
+      rejectSrcRegex: '(avatar|icon|logo|emoji|badge|sprite|btn|button|arrow|loading|placeholder|qrcode)',
+    },
+    text: {
+      minLength: 1,
+      dedupe: true,
+      skipIfHasDescendantSelector: '#detail-desc p, #detail-desc .desc, #detail-desc .note-text, img, video',
+    },
+    limits: {
+      maxBlocks: 500,
+      maxChars: 80000,
+    },
+  },
+  {
     id: 'sspai-article',
     label: '少数派',
     enabled: true,

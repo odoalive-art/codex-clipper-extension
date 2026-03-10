@@ -16,6 +16,47 @@ Notes:
 
 ## Entries
 
+### 2026-03-10 (Asia/Shanghai)
+- Author: Codex
+- Summary: 基于真实页面反馈收敛小红书图文抓取，并完成验收收尾。
+- Changes:
+  - 更新 `extractor.js`，为小红书增加 `#detail-desc` 正文兜底提取
+  - 更新 `extractor.js`，收窄标题识别，规避无标题帖子被“温馨提示”误识别
+  - 更新 `extractor.js`，按 `swiper` 索引重排最终图片块，修复克隆 slide 导致的首图错乱
+  - 更新 `tests/fixtures/xiaohongshu-note.html`，模拟 `#detail-desc + swiper-slide` 真实结构与克隆图场景
+  - 更新 `tests/run-regression.mjs`，补充小红书图片顺序断言
+  - 更新 `docs/ai-context.md`、`docs/todo.md`，同步验收状态与下一步重点
+- Files Modified:
+  - `extractor.js`
+  - `tests/fixtures/xiaohongshu-note.html`
+  - `tests/run-regression.mjs`
+  - `docs/ai-context.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 用户已确认小红书图文抓取验收通过；回归命令 `npm run test:regression` 通过。
+
+### 2026-03-10 (Asia/Shanghai)
+- Author: Codex
+- Summary: 新增小红书图文抓取支持，并补齐最小回归样例与文档同步。
+- Changes:
+  - 更新 `rules.js`，新增小红书默认规则，覆盖标题、正文、多图、正文内链接与噪声过滤
+  - 更新 `extractor.js`，将预滚动/图片等待扩展到小红书惰性加载场景，并补充装饰图过滤
+  - 新增 `tests/fixtures/xiaohongshu-note.html`
+  - 更新 `tests/run-regression.mjs`，增加小红书图文抓取回归用例
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `rules.js`
+  - `extractor.js`
+  - `tests/fixtures/xiaohongshu-note.html`
+  - `tests/run-regression.mjs`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 当前实现以公开可访问的图文笔记为目标，未扩展到评论、商品卡与视频笔记深度适配。
+
 ### 2026-03-05 00:00 (Asia/Shanghai)
 - Author: Codex
 - Summary: 建立 AI 协作开发基础文档，并按当前仓库实现补全上下文/架构/待办。

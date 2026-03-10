@@ -13,7 +13,7 @@
 - `extractor.js`：注入页面执行的内容提取模块
 - `notion-blocks.js`：Notion block 映射纯函数模块（文本/链接/列表/代码）
 - `tests/run-regression.mjs`：最小自动回归脚本（Node + jsdom）
-- `tests/fixtures/*`：回归用静态 HTML 样例
+- `tests/fixtures/*`：回归用静态 HTML 样例（含小红书图文夹具）
 - `docs/`：协作与项目文档
   - `docs/regression-cases.md`：最小手动回归案例清单
 
@@ -75,7 +75,7 @@
 - Background (`background.js`)
   - 设置 `openPanelOnActionClick`，点击扩展图标直接打开 Side Panel
 - Rule Engine (`rules.js`)
-  - 提供默认站点规则（小报童、微信公众号、站酷、少数派）
+  - 提供默认站点规则（小报童、微信公众号、站酷、小红书、少数派）
   - 作为默认站点规则的唯一数据源，供 Side Panel、设置页与回归测试共用
   - 对用户输入规则做合法化与兜底归一化
   - 归一化时会自动并入缺失的内置规则，避免升级后新增站点标签缺失
@@ -84,6 +84,7 @@
 - Extraction Engine (`extractor.js`)
   - 消费调用方传入的已归一化规则列表，未命中站点时回退通用规则
   - 基于域名选择命中规则，未命中则回退通用规则
+  - 针对公众号、小红书支持抓取前预滚动与图片等待，兼容惰性加载内容
   - 根据选择器扫描候选节点并执行噪声过滤
   - 标题提取优先按 `titleSelectors` 输出首个标题块，并通过去重避免重复标题
   - 对 `pre > code` 代码块做专门文本提取，避免混入“复制代码”等按钮文案

@@ -2,6 +2,7 @@ export const SUPPORTED_SITES = [
   { host: 'xiaobot.net', label: '小报童' },
   { host: 'mp.weixin.qq.com', label: '公众号' },
   { host: 'zcool.com.cn', label: '站酷' },
+  { host: 'xiaohongshu.com', label: '小红书' },
   { host: 'sspai.com', label: '少数派' },
 ];
 
@@ -330,21 +331,163 @@ export async function extractPageContent(options = {}) {
     return '';
   }
 
-  function extractTextFromNode(el) {
+  function normalizeTextContent(raw) {
+    return String(raw || '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/\u00a0/g, ' ')
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+  }
+
+  function isXiaohongshuDescNode(rule, el) {
+    if (rule?.id !== 'xiaohongshu-note' || !(el instanceof Element)) return false;
+    if (el.id === 'detail-desc') return true;
+    if (typeof el.className === 'string' && /\b(desc|note-text|content)\b/.test(el.className)) return true;
+    return false;
+  }
+
+  function isLikelyWarningTitle(text) {
+    const value = normalizeTextContent(text);
+    if (!value) return false;
+    return /^(温馨提示|安全提示|提示|警告)$/.test(value);
+  }
+
+  function extractTitleWithRule(rule) {
+    const titleSelector = rule.titleSelectors.join(', ');
+    const titleEl = titleSelector ? document.querySelector(titleSelector) : null;
+    const title = normalizeTextContent(titleEl?.innerText || titleEl?.textContent || '');
+    if (rule.id === 'xiaohongshu-note' && isLikelyWarningTitle(title)) return '';
+    return title;
+  }
+
+  function swiperSlideOrder(el) {
+    if (!(el instanceof Element)) return Number.POSITIVE_INFINITY;
+    const slide = el.closest('.swiper-slide');
+    if (!slide) return Number.POSITIVE_INFINITY;
+    const raw =
+      slide.getAttribute('data-swiper-slide-index') ||
+      slide.getAttribute('data-index') ||
+      slide.dataset?.swiperSlideIndex ||
+      slide.dataset?.index ||
+      '';
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+  }
+
+  function hasIndexedSwiperTwin(rule, el, src, resolver) {
+    if (rule?.id !== 'xiaohongshu-note' || !(el instanceof Element) || !src) return false;
+    if (Number.isFinite(swiperSlideOrder(el))) return false;
+    const candidates = Array.from(document.querySelectorAll('.swiper-slide[data-swiper-slide-index] img, .swiper-slide[data-index] img'));
+    return candidates.some(candidate => candidate !== el && resolver(candidate) === src);
+  }
+
+  function getContentNodes(rule, root) {
+    const contentSelector = rule.contentSelectors.join(', ');
+    const nodes = contentSelector ? Array.from(root.querySelectorAll(contentSelector)) : [];
+    if (rule.id !== 'xiaohongshu-note') return nodes;
+
+    return nodes.sort((a, b) => {
+      const aMedia = a.tagName === 'IMG' || a.tagName === 'VIDEO';
+      const bMedia = b.tagName === 'IMG' || b.tagName === 'VIDEO';
+      if (aMedia && bMedia) {
+        const orderDiff = swiperSlideOrder(a) - swiperSlideOrder(b);
+        if (orderDiff !== 0) return orderDiff;
+      }
+      if (a === b) return 0;
+      const pos = a.compareDocumentPosition(b);
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      return 0;
+    });
+  }
+
+  function buildXiaohongshuMediaOrderMap(rule) {
+    const orderMap = new Map();
+    if (rule?.id !== 'xiaohongshu-note') return orderMap;
+    const indexedMedia = Array.from(
+      document.querySelectorAll('.swiper-slide[data-swiper-slide-index] img, .swiper-slide[data-index] img, .swiper-slide[data-swiper-slide-index] video, .swiper-slide[data-index] video')
+    );
+    indexedMedia.forEach(el => {
+      const order = swiperSlideOrder(el);
+      if (!Number.isFinite(order)) return;
+      const src = el.tagName === 'VIDEO' ? resolveVideoSrc(el) : resolveImageSrc(el, rule.image.srcAttrs);
+      if (!src || orderMap.has(src)) return;
+      orderMap.set(src, order);
+    });
+    return orderMap;
+  }
+
+  function reorderXiaohongshuMediaBlocks(rule, blocks, mediaOrderMap) {
+    if (rule?.id !== 'xiaohongshu-note' || !mediaOrderMap.size) return blocks;
+    const mediaIndexes = [];
+    const mediaBlocks = [];
+    blocks.forEach((block, index) => {
+      if (block?.type !== 'img' && block?.type !== 'video') return;
+      mediaIndexes.push(index);
+      mediaBlocks.push(block);
+    });
+    if (mediaBlocks.length < 2) return blocks;
+
+    mediaBlocks.sort((a, b) => {
+      const aOrder = mediaOrderMap.get(a.src) ?? Number.POSITIVE_INFINITY;
+      const bOrder = mediaOrderMap.get(b.src) ?? Number.POSITIVE_INFINITY;
+      return aOrder - bOrder;
+    });
+
+    const nextBlocks = [...blocks];
+    mediaIndexes.forEach((index, i) => {
+      nextBlocks[index] = mediaBlocks[i];
+    });
+    return nextBlocks;
+  }
+
+  function appendXiaohongshuDescFallback(rule, blocks, seenText, debug) {
+    if (rule.id !== 'xiaohongshu-note') return;
+    if (blocks.some(block => block.type === 'p' || block.type === 'quote')) return;
+
+    const descEl = document.querySelector('#detail-desc');
+    if (!(descEl instanceof Element)) return;
+
+    const text = extractTextFromNode(descEl, rule);
+    if (!text || seenText.has(text)) return;
+
+    const segments = extractInlineSegments(descEl, text);
+    seenText.add(text);
+    blocks.push({
+      type: 'p',
+      content: text,
+      ...(segments.length ? { segments } : { segments: [{ type: 'text', text }] }),
+    });
+    debug.counters.kept += 1;
+  }
+
+  function extractTextFromNode(el, rule) {
     if (!(el instanceof Element)) return '';
+    if (isXiaohongshuDescNode(rule, el)) {
+      const rawText = normalizeTextContent(el.textContent || '');
+      if (!rawText) return '';
+      return rawText
+        .split('\n')
+        .filter(line => !/^(展开|收起|赞|评论|分享)$/i.test(line))
+        .join('\n')
+        .trim();
+    }
     if (el.tagName === 'PRE') {
       const codeEl = el.querySelector('code');
       const codeText = codeEl?.innerText || '';
       const normalizedCode = codeText.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
       if (normalizedCode) return normalizedCode;
     }
-    return el.innerText?.trim() || '';
+    return normalizeTextContent(el.innerText || el.textContent || '');
   }
 
   async function preloadLazyContentIfNeeded(rule, debug) {
     const preloadEnabled = options?.preloadLazy !== false;
     if (!preloadEnabled) return;
-    if (!rule || rule.id !== 'wechat-mp') return;
+    if (!rule || !['wechat-mp', 'xiaohongshu-note'].includes(rule.id)) return;
 
     const startY = window.scrollY || 0;
     const scroller = document.scrollingElement || document.documentElement;
@@ -424,6 +567,7 @@ export async function extractPageContent(options = {}) {
     const blocks = [];
     const seenText = new Set();
     const seenImage = new Set();
+    const mediaOrderMap = buildXiaohongshuMediaOrderMap(rule);
     let totalChars = 0;
 
     const classRe = toRegExp(rule.exclude.ancestorClassRegex);
@@ -433,20 +577,15 @@ export async function extractPageContent(options = {}) {
     const { root, selector } = findRoot(rule);
     debug.rootSelector = selector;
 
-    const titleSelector = rule.titleSelectors.join(', ');
-    const titleEl = titleSelector ? document.querySelector(titleSelector) : null;
-    if (titleEl) {
-      const title = titleEl.innerText?.trim() || '';
-      if (title) {
-        blocks.push({ type: 'h1', content: title });
-        seenText.add(title);
-        totalChars += title.length;
-        debug.counters.kept += 1;
-      }
+    const title = extractTitleWithRule(rule);
+    if (title) {
+      blocks.push({ type: 'h1', content: title });
+      seenText.add(title);
+      totalChars += title.length;
+      debug.counters.kept += 1;
     }
 
-    const contentSelector = rule.contentSelectors.join(', ');
-    const nodes = contentSelector ? root.querySelectorAll(contentSelector) : [];
+    const nodes = getContentNodes(rule, root);
 
     for (const el of nodes) {
       debug.counters.candidates += 1;
@@ -471,6 +610,10 @@ export async function extractPageContent(options = {}) {
           debug.counters.skipInvalidImageSrc += 1;
           continue;
         }
+        if (hasIndexedSwiperTwin(rule, el, src, candidate => resolveImageSrc(candidate, rule.image.srcAttrs))) {
+          debug.counters.skipDuplicateImage += 1;
+          continue;
+        }
         if (rejectSrcRe?.test(src)) {
           debug.counters.skipDecorativeImage += 1;
           continue;
@@ -482,6 +625,11 @@ export async function extractPageContent(options = {}) {
 
         const w = el.naturalWidth || el.clientWidth || 0;
         const h = el.naturalHeight || el.clientHeight || 0;
+        const alt = (el.getAttribute('alt') || '').trim();
+        if (rejectSrcRe?.test(alt)) {
+          debug.counters.skipDecorativeImage += 1;
+          continue;
+        }
         if ((w > 0 && w < rule.image.minWidth) || (h > 0 && h < rule.image.minHeight)) {
           debug.counters.skipSmallImage += 1;
           continue;
@@ -508,7 +656,7 @@ export async function extractPageContent(options = {}) {
         continue;
       }
 
-      const text = extractTextFromNode(el);
+      const text = extractTextFromNode(el, rule);
       if (el.tagName === 'PRE') {
         if (!text) {
           debug.counters.skipEmpty += 1;
@@ -584,7 +732,9 @@ export async function extractPageContent(options = {}) {
       debug.counters.kept += 1;
     }
 
-    return { blocks, debug };
+    appendXiaohongshuDescFallback(rule, blocks, seenText, debug);
+
+    return { blocks: reorderXiaohongshuMediaBlocks(rule, blocks, mediaOrderMap), debug };
   }
 
   const debugEnabled = options?.debug === true;

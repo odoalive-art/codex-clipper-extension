@@ -131,6 +131,24 @@ await runCase('extractor/wechat-basic', async () => {
   assert(blocks.some(item => item.type === 'img' && String(item.src || '').includes('mmbiz.qpic.cn')), 'wechat image missing');
 });
 
+await runCase('extractor/xiaohongshu-note', async () => {
+  const html = await loadFixture('xiaohongshu-note.html');
+  const payload = await withDom(html, 'https://www.xiaohongshu.com/explore/66bbccddeeff001122334455', () =>
+    extractPageContent({ rules: defaultRules, debug: true })
+  );
+  const blocks = Array.isArray(payload.blocks) ? payload.blocks : [];
+  assert(payload?.debug?.matchedRuleId === 'xiaohongshu-note', `expected xiaohongshu-note rule, got ${payload?.debug?.matchedRuleId}`);
+  assert(blocks.some(item => item.type === 'h1' && item.content === '周末把书桌重新布置了一遍'), 'xiaohongshu title missing');
+  assert(blocks.some(item => item.type === 'p' && String(item.content || '').includes('显示器抬高一点')), 'xiaohongshu paragraph missing');
+  assert(blocks.some(item => item.type === 'p' && Array.isArray(item.segments) && item.segments.some(seg => seg.type === 'link')), 'xiaohongshu link segments missing');
+  const images = blocks.filter(item => item.type === 'img');
+  assert(images.length === 2, `expected 2 xiaohongshu images, got ${images.length}`);
+  assert(images[0]?.src?.includes('note-cover-1.jpg'), `expected first image to be note-cover-1.jpg, got ${images[0]?.src}`);
+  assert(images[1]?.src?.includes('note-cover-2.jpg'), `expected second image to be note-cover-2.jpg, got ${images[1]?.src}`);
+  assert(!blocks.some(item => String(item.content || '').includes('评论区内容')), 'comment noise should be filtered');
+  assert(!blocks.some(item => String(item.content || '').includes('相关推荐')), 'recommend noise should be filtered');
+});
+
 await runCase('notion-mapping/list-link-code', async () => {
   const listBlocks = listBlockToNotion('用 git 管理代码修改版本', [], 'bulleted');
   assert(Array.isArray(listBlocks) && listBlocks[0]?.type === 'bulleted_list_item', 'bulleted list mapping failed');
