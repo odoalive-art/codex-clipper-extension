@@ -9,6 +9,17 @@ import {
   normalizeLinkUrl,
   textBlockToNotion,
 } from './notion-blocks.js';
+import {
+  buildRelativePath,
+  detectObsidianAttachmentFolder,
+  detectObsidianNewNoteFolder,
+  getVaultRootHandle,
+  normalizePathSegments,
+  queryHandlePermission,
+  resolveUniqueFilePath,
+  writeBlobFileByPath,
+  writeTextFileByPath,
+} from './obsidian-local.js';
 
 const grabBtn = document.getElementById('grabBtn');
 const copyBtn = document.getElementById('copyBtn');
@@ -27,6 +38,7 @@ const statusChip = document.getElementById('statusChip');
 const countChip = document.getElementById('countChip');
 const openSettingsBtn = document.getElementById('openSettingsBtn');
 const exportNotionBtn = document.getElementById('exportNotionBtn');
+const clipToObsidianBtn = document.getElementById('clipToObsidianBtn');
 const clipToNotionBtn = document.getElementById('clipToNotionBtn');
 const notionTokenInput = document.getElementById('notionTokenInput');
 const notionParentPageInput = document.getElementById('notionParentPageInput');
@@ -38,11 +50,17 @@ const notionPageSelect = document.getElementById('notionPageSelect');
 const notionConfigStatus = document.getElementById('notionConfigStatus');
 const footer = document.querySelector('.footer');
 const debugMockBtn = document.getElementById('debugMockBtn');
+const obsidianToast = document.getElementById('obsidianToast');
+const obsidianToastTitle = document.getElementById('obsidianToastTitle');
+const obsidianToastDetail = document.getElementById('obsidianToastDetail');
+const obsidianToastAction = document.getElementById('obsidianToastAction');
+const obsidianToastDismiss = document.getElementById('obsidianToastDismiss');
 
 const SAFE_PROTOCOLS = new Set(['http:', 'https:']);
 const PREVIEW_PROTOCOLS = new Set(['http:', 'https:', 'data:', 'blob:']);
 const NOTION_API_BASE = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2025-09-03';
+const OBSIDIAN_URI_SOFT_LIMIT = 120000;
 
 const state = {
   rules: getDefaultRules(),
@@ -50,6 +68,10 @@ const state = {
   activeHost: '',
   notionToken: '',
   notionParentPageId: '',
+  obsidianVault: '',
+  obsidianFolder: '',
+  obsidianWriteMode: 'uri',
+  obsidianAttachmentFolder: 'images',
   notionWriteTargetType: 'page',
   notionLastPageId: '',
   notionLastDataSourceId: '',
@@ -60,6 +82,7 @@ const state = {
   lastGrabUrl: '',
   activeRuleId: '',
   previewBlocks: [],
+  obsidianToastTimer: 0,
 };
 
 function createPlaceholderImageDataUrl(title, toneA, toneB) {
@@ -560,6 +583,10 @@ async function loadSettings() {
   const stored = await chrome.storage.local.get([
     STORAGE_KEYS.siteRules,
     STORAGE_KEYS.debugMode,
+    STORAGE_KEYS.obsidianVault,
+    STORAGE_KEYS.obsidianFolder,
+    STORAGE_KEYS.obsidianWriteMode,
+    STORAGE_KEYS.obsidianAttachmentFolder,
     STORAGE_KEYS.notionToken,
     STORAGE_KEYS.notionParentPageId,
     STORAGE_KEYS.notionWriteTargetType,
@@ -571,6 +598,13 @@ async function loadSettings() {
   ]);
   state.rules = normalizeRules(stored[STORAGE_KEYS.siteRules]);
   state.debugMode = stored[STORAGE_KEYS.debugMode] !== false;
+  state.obsidianVault = typeof stored[STORAGE_KEYS.obsidianVault] === 'string' ? stored[STORAGE_KEYS.obsidianVault].trim() : '';
+  state.obsidianFolder = typeof stored[STORAGE_KEYS.obsidianFolder] === 'string' ? stored[STORAGE_KEYS.obsidianFolder].trim() : '';
+  state.obsidianWriteMode = stored[STORAGE_KEYS.obsidianWriteMode] === 'local' ? 'local' : 'uri';
+  state.obsidianAttachmentFolder =
+    typeof stored[STORAGE_KEYS.obsidianAttachmentFolder] === 'string' && stored[STORAGE_KEYS.obsidianAttachmentFolder].trim()
+      ? stored[STORAGE_KEYS.obsidianAttachmentFolder].trim()
+      : 'images';
   state.notionToken = typeof stored[STORAGE_KEYS.notionToken] === 'string' ? stored[STORAGE_KEYS.notionToken].trim() : '';
   state.notionParentPageId =
     typeof stored[STORAGE_KEYS.notionParentPageId] === 'string' ? stored[STORAGE_KEYS.notionParentPageId].trim() : '';
@@ -810,6 +844,272 @@ function sanitizeFilename(raw, fallback = 'article') {
     .trim();
   if (!cleaned) return fallback;
   return cleaned.slice(0, 80);
+}
+
+function sanitizePathSegment(raw, fallback = 'Untitled') {
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  const cleaned = text.replace(/[\\/:*?"<>|#[\]^]/g, ' ').replace(/\s+/g, ' ').replace(/^\.+|\.+$/g, '').trim();
+  return cleaned || fallback;
+}
+
+function getObsidianTitleFromBlocks(blocks, fallbackTitle = '') {
+  const heading = Array.isArray(blocks)
+    ? blocks.find(block => block?.type === 'h1' && typeof block.content === 'string' && block.content.trim())
+    : null;
+  const title = heading?.content?.trim() || fallbackTitle || '未命名文章';
+  return sanitizePathSegment(title, '未命名文章');
+}
+
+function buildObsidianNotePath(noteTitle) {
+  const safeTitle = sanitizePathSegment(noteTitle, '未命名文章');
+  const safeFolder = String(state.obsidianFolder || '')
+    .split(/[\\/]+/)
+    .map(segment => sanitizePathSegment(segment, ''))
+    .filter(Boolean)
+    .join('/');
+  const basePath = safeFolder ? `${safeFolder}/${safeTitle}` : safeTitle;
+  return basePath.endsWith('.md') ? basePath : `${basePath}.md`;
+}
+
+function buildObsidianUri(noteTitle, markdown) {
+  const params = [['content', markdown], ['overwrite', 'true']];
+  if (String(state.obsidianFolder || '').trim()) {
+    params.unshift(['file', buildObsidianNotePath(noteTitle)]);
+  } else {
+    params.unshift(['name', sanitizePathSegment(noteTitle, '未命名文章')]);
+  }
+  if (state.obsidianVault) params.push(['vault', state.obsidianVault]);
+  const query = params.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&');
+  return `obsidian://new?${query}`;
+}
+
+async function openExternalUri(uri) {
+  if (typeof uri !== 'string' || !uri) return false;
+  if (chrome?.tabs?.create) {
+    try {
+      await chrome.tabs.create({ url: uri, active: true });
+      return true;
+    } catch (err) {
+      console.warn('chrome.tabs.create failed for external uri:', err);
+    }
+  }
+  try {
+    const opened = window.open(uri, '_blank', 'noopener,noreferrer');
+    if (opened) return true;
+  } catch (err) {
+    console.warn('window.open failed for external uri:', err);
+  }
+  try {
+    window.location.href = uri;
+    return true;
+  } catch (err) {
+    console.warn('location.href failed for external uri:', err);
+  }
+  return false;
+}
+
+function buildShortObsidianImportMarkdown() {
+  return '完整正文已复制到剪贴板。\n\n请在当前笔记中全选后粘贴覆盖。';
+}
+
+function createObsidianError(code, message, extra = {}) {
+  const err = new Error(message);
+  err.code = code;
+  Object.assign(err, extra);
+  return err;
+}
+
+function hideObsidianToast() {
+  if (state.obsidianToastTimer) {
+    clearTimeout(state.obsidianToastTimer);
+    state.obsidianToastTimer = 0;
+  }
+  if (!obsidianToast) return;
+  obsidianToast.classList.remove('show', 'warn', 'error');
+}
+
+function showObsidianToast({ tone = '', title = '', detail = '', actionLabel = '', actionHandler = null, duration = 8000 } = {}) {
+  if (!obsidianToast || !obsidianToastTitle || !obsidianToastDetail || !obsidianToastAction) return;
+  hideObsidianToast();
+  obsidianToastTitle.textContent = title || 'Obsidian 提示';
+  obsidianToastDetail.textContent = detail || '';
+  obsidianToast.classList.remove('warn', 'error');
+  if (tone) obsidianToast.classList.add(tone);
+  if (actionLabel && typeof actionHandler === 'function') {
+    obsidianToastAction.hidden = false;
+    obsidianToastAction.textContent = actionLabel;
+    obsidianToastAction.onclick = () => {
+      actionHandler();
+      hideObsidianToast();
+    };
+  } else {
+    obsidianToastAction.hidden = true;
+    obsidianToastAction.textContent = '';
+    obsidianToastAction.onclick = null;
+  }
+  obsidianToast.classList.add('show');
+  if (duration > 0) {
+    state.obsidianToastTimer = window.setTimeout(() => {
+      hideObsidianToast();
+    }, duration);
+  }
+}
+
+function buildObsidianFeedbackTitle(reason, action, details = []) {
+  return [reason, action ? `下一步：${action}` : '', ...details.filter(Boolean)].filter(Boolean).join('\n');
+}
+
+function getObsidianErrorFeedback(err, options = {}) {
+  const code = typeof err?.code === 'string' ? err.code : '';
+  const reason = typeof err?.message === 'string' && err.message.trim() ? err.message.trim() : '未知错误';
+  const notePath = typeof err?.notePath === 'string' && err.notePath ? `笔记目标：${err.notePath}` : '';
+  const attachmentPath = typeof err?.attachmentPath === 'string' && err.attachmentPath ? `附件目录：${err.attachmentPath}` : '';
+  const fallbackMode = options.fallbackMode === 'uri-fallback-paste' ? 'paste' : options.fallbackMode === 'uri-direct' ? 'uri' : '';
+
+  if (code === 'obsidian-vault-handle-missing') {
+    return {
+      buttonLabel: fallbackMode ? '已回退' : '待设置',
+      statusText: fallbackMode ? '状态：已回退 URI，请先绑定库目录' : '状态：请先绑定库目录',
+      tone: 'warn',
+      title: buildObsidianFeedbackTitle(reason, '打开设置页 > Obsidian > 选择本地库目录，并保存配置。'),
+      actionLabel: '打开设置',
+      actionKind: 'open-settings',
+    };
+  }
+
+  if (code === 'obsidian-vault-required') {
+    return {
+      buttonLabel: '待设置',
+      statusText: '状态：请先填写 Vault',
+      tone: 'warn',
+      title: buildObsidianFeedbackTitle(reason, '打开设置页 > Obsidian，填写 Vault（必填）并保存。'),
+      actionLabel: '打开设置',
+      actionKind: 'open-settings',
+    };
+  }
+
+  if (code === 'obsidian-vault-permission-denied') {
+    return {
+      buttonLabel: fallbackMode ? '已回退' : '待授权',
+      statusText: fallbackMode ? '状态：已回退 URI，请重新授权目录' : '状态：请重新授权目录',
+      tone: 'warn',
+      title: buildObsidianFeedbackTitle(reason, '打开设置页 > Obsidian > 重新选择本地库目录授权。'),
+      actionLabel: '打开设置',
+      actionKind: 'open-settings',
+    };
+  }
+
+  if (code === 'obsidian-uri-clipboard-unavailable') {
+    return {
+      buttonLabel: '发送失败',
+      statusText: '状态：长文降级失败，无法写剪贴板',
+      tone: 'error',
+      title: buildObsidianFeedbackTitle(reason, '改用较短内容重试，或在支持剪贴板写入的环境中发送。'),
+    };
+  }
+
+  if (code === 'obsidian-uri-open-failed') {
+    return {
+      buttonLabel: '发送失败',
+      statusText: '状态：无法唤起 Obsidian',
+      tone: 'error',
+      title: buildObsidianFeedbackTitle(reason, '确认已安装 Obsidian，并允许浏览器打开 obsidian:// 链接。'),
+      actionLabel: '打开设置',
+      actionKind: 'open-settings',
+    };
+  }
+
+  if (code === 'obsidian-local-empty-content' || code === 'obsidian-empty-content') {
+    return {
+      buttonLabel: '无内容',
+      statusText: '状态：无可发送内容',
+      tone: 'warn',
+      title: buildObsidianFeedbackTitle(reason, '先执行抓取，确认预览区已有正文或图片内容。'),
+    };
+  }
+
+  if (code === 'obsidian-local-note-write-failed') {
+    return {
+      buttonLabel: fallbackMode ? '已回退' : '发送失败',
+      statusText: fallbackMode ? '状态：本地写入失败，已回退 URI' : '状态：本地写入失败',
+      tone: fallbackMode ? 'warn' : 'error',
+      title: buildObsidianFeedbackTitle(reason, '检查库目录是否仍可写、标题路径是否可创建，然后重试。', [notePath, attachmentPath]),
+      actionLabel: '打开设置',
+      actionKind: 'open-settings',
+    };
+  }
+
+  return {
+    buttonLabel: fallbackMode ? '已回退' : '发送失败',
+    statusText: fallbackMode ? '状态：本地写入失败，已回退 URI' : '状态：Obsidian 发送失败',
+    tone: fallbackMode ? 'warn' : 'error',
+    title: buildObsidianFeedbackTitle(reason, fallbackMode ? '先在 Obsidian 中确认回退笔记已创建，再处理本地写入问题。' : '检查 Obsidian 配置和浏览器权限后重试。', [notePath, attachmentPath]),
+  };
+}
+
+async function sendToObsidianByUri({ blocks, noteTitle, sourceUrl }) {
+  const markdown = buildObsidianMarkdown(blocks, sourceUrl, noteTitle);
+  if (!markdown) {
+    throw createObsidianError('obsidian-empty-content', '当前没有可发送内容');
+  }
+  const uri = buildObsidianUri(noteTitle, markdown);
+  if (uri.length > OBSIDIAN_URI_SOFT_LIMIT) {
+    if (!navigator.clipboard?.writeText) {
+      throw createObsidianError('obsidian-uri-clipboard-unavailable', '当前环境不支持写入剪贴板，无法执行长文降级流程');
+    }
+    await navigator.clipboard.writeText(markdown);
+    const placeholderUri = buildObsidianUri(noteTitle, buildShortObsidianImportMarkdown());
+    const dispatched = await openExternalUri(placeholderUri);
+    if (!dispatched) throw createObsidianError('obsidian-uri-open-failed', '无法唤起 obsidian:// 链接');
+    return { mode: 'uri-fallback-paste' };
+  }
+  const dispatched = await openExternalUri(uri);
+  if (!dispatched) {
+    throw createObsidianError('obsidian-uri-open-failed', '无法唤起 obsidian:// 链接');
+  }
+  return { mode: 'uri-direct' };
+}
+
+async function refreshObsidianSettingsFromStorage() {
+  const stored = await chrome.storage.local.get([
+    STORAGE_KEYS.obsidianVault,
+    STORAGE_KEYS.obsidianFolder,
+    STORAGE_KEYS.obsidianWriteMode,
+    STORAGE_KEYS.obsidianAttachmentFolder,
+  ]);
+  state.obsidianVault = typeof stored[STORAGE_KEYS.obsidianVault] === 'string' ? stored[STORAGE_KEYS.obsidianVault].trim() : '';
+  state.obsidianFolder = typeof stored[STORAGE_KEYS.obsidianFolder] === 'string' ? stored[STORAGE_KEYS.obsidianFolder].trim() : '';
+  state.obsidianWriteMode = stored[STORAGE_KEYS.obsidianWriteMode] === 'local' ? 'local' : 'uri';
+  state.obsidianAttachmentFolder =
+    typeof stored[STORAGE_KEYS.obsidianAttachmentFolder] === 'string' && stored[STORAGE_KEYS.obsidianAttachmentFolder].trim()
+      ? stored[STORAGE_KEYS.obsidianAttachmentFolder].trim()
+      : 'images';
+}
+
+function ensureObsidianVaultConfigured() {
+  if (!state.obsidianVault) {
+    throw createObsidianError('obsidian-vault-required', 'Vault 尚未同步，请先到设置页选择本地库目录。');
+  }
+}
+
+async function openObsidianWrittenNote(notePath) {
+  const safePath = String(notePath || '').trim();
+  if (!safePath) return false;
+  const params = [['vault', state.obsidianVault], ['file', safePath]];
+  const query = params.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&');
+  return openExternalUri(`obsidian://open?${query}`);
+}
+
+async function ensureVaultWritePermissionForLocalMode() {
+  const vaultRootHandle = await getVaultRootHandle();
+  if (!vaultRootHandle) {
+    throw createObsidianError('obsidian-vault-handle-missing', '未绑定本地库目录，请先到设置页点击“选择本地库目录”。');
+  }
+  const permission = await queryHandlePermission(vaultRootHandle, 'readwrite');
+  if (permission !== 'granted') {
+    throw createObsidianError('obsidian-vault-permission-denied', '本地库目录未授权写入。请到设置页重新选择目录并授权。');
+  }
+  return vaultRootHandle;
 }
 
 function toNotionUuid(raw) {
@@ -1694,6 +1994,226 @@ async function clipPreviewToNotion() {
   };
 }
 
+function buildObsidianMarkdown(blocks, sourceUrl = '', noteTitle = '') {
+  const markdownLines = [];
+  if (sourceUrl) {
+    markdownLines.push('---');
+    markdownLines.push(`source: ${JSON.stringify(sourceUrl || '')}`);
+    markdownLines.push('---');
+    markdownLines.push('');
+  }
+  for (const block of blocks) {
+    if (!block || typeof block !== 'object') continue;
+    if ((block.type === 'h1' || block.type === 'h2' || block.type === 'h3' || block.type === 'p' || block.type === 'quote') && block.content) {
+      const text = inlineSegmentsToMarkdown(block.content, block.segments);
+      if (!text.trim()) continue;
+      if (block.type === 'h1') {
+        const normalizedTextTitle = sanitizePathSegment(text, '');
+        const normalizedNoteTitle = sanitizePathSegment(noteTitle, '');
+        if (normalizedNoteTitle && normalizedTextTitle === normalizedNoteTitle) {
+          continue;
+        }
+        markdownLines.push(`# ${text}`);
+      }
+      else if (block.type === 'h2') markdownLines.push(`## ${text}`);
+      else if (block.type === 'h3') markdownLines.push(`### ${text}`);
+      else if (block.type === 'quote') markdownLines.push(`> ${text}`);
+      else markdownLines.push(text);
+      markdownLines.push('');
+      continue;
+    }
+    if (block.type === 'li' && block.content) {
+      const text = inlineSegmentsToMarkdown(block.content, block.segments);
+      if (!text.trim()) continue;
+      const marker = block.listType === 'numbered' ? '1.' : '-';
+      markdownLines.push(`${marker} ${text}`);
+      markdownLines.push('');
+      continue;
+    }
+    if (block.type === 'code') {
+      const normalizedCode = String(block.content || '').replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
+      if (!normalizedCode.trim()) continue;
+      const language = normalizeCodeLanguage(block.language);
+      markdownLines.push(`\`\`\`${language === 'plain text' ? '' : language}`);
+      markdownLines.push(normalizedCode);
+      markdownLines.push('```');
+      markdownLines.push('');
+      continue;
+    }
+    if (block.type === 'video') {
+      const src = normalizeHttpUrl(block.src || '');
+      if (!src) continue;
+      markdownLines.push(`[视频](${src})`);
+      markdownLines.push('');
+      continue;
+    }
+    if (block.type === 'img') {
+      const src = normalizePreviewUrl(block.src || '');
+      if (!src) continue;
+      markdownLines.push(`![](${src})`);
+      markdownLines.push('');
+    }
+  }
+  return markdownLines.join('\n').trim();
+}
+
+function joinPathSegments(...parts) {
+  return parts.flatMap(part => normalizePathSegments(part));
+}
+
+function getEffectiveAttachmentRoot(detectedRule, fallbackFolder, noteDirSegments) {
+  const raw = String(detectedRule || '').trim();
+  if (raw) {
+    if (raw === '.') {
+      return { pathSegments: [...noteDirSegments], source: 'obsidian', displayPath: '.' };
+    }
+    if (raw.startsWith('./')) {
+      return {
+        pathSegments: [...noteDirSegments, ...normalizePathSegments(raw.slice(2))],
+        source: 'obsidian',
+        displayPath: raw,
+      };
+    }
+    if (raw === '/') {
+      return { pathSegments: [], source: 'obsidian', displayPath: '/' };
+    }
+    const normalized = normalizePathSegments(raw);
+    if (normalized.length) {
+      return { pathSegments: normalized, source: 'obsidian', displayPath: normalized.join('/') };
+    }
+  }
+  const fallback = normalizePathSegments(fallbackFolder || 'images');
+  return {
+    pathSegments: fallback.length ? fallback : ['images'],
+    source: 'extension',
+    displayPath: fallback.length ? fallback.join('/') : 'images',
+  };
+}
+
+function toMarkdownLinkTarget(path) {
+  const value = String(path || '').trim();
+  if (!value) return '';
+  return `<${value}>`;
+}
+
+async function writeObsidianNoteLocal({ blocks, noteTitle, sourceUrl, vaultRootHandle }) {
+  const detectedNewNoteFolder = !String(state.obsidianFolder || '').trim()
+    ? await detectObsidianNewNoteFolder(vaultRootHandle)
+    : '';
+  const noteDirSegments = joinPathSegments(state.obsidianFolder || detectedNewNoteFolder);
+  const detectedAttachmentFolder = await detectObsidianAttachmentFolder(vaultRootHandle);
+  const attachmentRoot = getEffectiveAttachmentRoot(detectedAttachmentFolder, state.obsidianAttachmentFolder, noteDirSegments);
+  const noteFileName = `${sanitizePathSegment(noteTitle, '未命名文章')}.md`;
+  const requestedNotePathSegments = [...noteDirSegments, noteFileName];
+  const notePathSegments = await resolveUniqueFilePath(vaultRootHandle, requestedNotePathSegments);
+  const resolvedNoteFileName = notePathSegments[notePathSegments.length - 1] || noteFileName;
+  const noteStem = resolvedNoteFileName.replace(/\.md$/i, '') || sanitizePathSegment(noteTitle, '未命名文章');
+  const duplicated = resolvedNoteFileName !== noteFileName;
+  const notePath = notePathSegments.join('/');
+  const requestedNotePath = requestedNotePathSegments.join('/');
+  const attachmentPath = attachmentRoot.displayPath;
+
+  const markdownLines = [];
+  if (sourceUrl) {
+    markdownLines.push('---');
+    markdownLines.push(`source: ${JSON.stringify(sourceUrl)}`);
+    markdownLines.push('---');
+    markdownLines.push('');
+  }
+
+  let imageIndex = 0;
+  let failedImages = 0;
+  for (const block of blocks) {
+    if (!block || typeof block !== 'object') continue;
+    if ((block.type === 'h1' || block.type === 'h2' || block.type === 'h3' || block.type === 'p' || block.type === 'quote') && block.content) {
+      const text = inlineSegmentsToMarkdown(block.content, block.segments);
+      if (!text.trim()) continue;
+      if (block.type === 'h1') {
+        const normalizedTextTitle = sanitizePathSegment(text, '');
+        const normalizedNoteTitle = sanitizePathSegment(noteTitle, '');
+        if (normalizedNoteTitle && normalizedTextTitle === normalizedNoteTitle) continue;
+        markdownLines.push(`# ${text}`);
+      } else if (block.type === 'h2') markdownLines.push(`## ${text}`);
+      else if (block.type === 'h3') markdownLines.push(`### ${text}`);
+      else if (block.type === 'quote') markdownLines.push(`> ${text}`);
+      else markdownLines.push(text);
+      markdownLines.push('');
+      continue;
+    }
+    if (block.type === 'li' && block.content) {
+      const text = inlineSegmentsToMarkdown(block.content, block.segments);
+      if (!text.trim()) continue;
+      const marker = block.listType === 'numbered' ? '1.' : '-';
+      markdownLines.push(`${marker} ${text}`);
+      markdownLines.push('');
+      continue;
+    }
+    if (block.type === 'code') {
+      const normalizedCode = String(block.content || '').replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '');
+      if (!normalizedCode.trim()) continue;
+      const language = normalizeCodeLanguage(block.language);
+      markdownLines.push(`\`\`\`${language === 'plain text' ? '' : language}`);
+      markdownLines.push(normalizedCode);
+      markdownLines.push('```');
+      markdownLines.push('');
+      continue;
+    }
+    if (block.type === 'video') {
+      const src = normalizeHttpUrl(block.src || '');
+      if (!src) continue;
+      markdownLines.push(`[视频](${src})`);
+      markdownLines.push('');
+      continue;
+    }
+    if (block.type === 'img') {
+      const src = normalizePreviewUrl(block.src || '');
+      if (!src) continue;
+      imageIndex += 1;
+      try {
+        const blob = await fetchImageBlob(src);
+        const ext = getImageExt(blob, src);
+        const imageFileName = `${noteStem}__${String(imageIndex).padStart(3, '0')}.${ext}`;
+        const requestedImagePathSegments = [...attachmentRoot.pathSegments, imageFileName];
+        const imagePathSegments = await resolveUniqueFilePath(vaultRootHandle, requestedImagePathSegments);
+        await writeBlobFileByPath(vaultRootHandle, imagePathSegments, blob);
+        const relative = buildRelativePath(noteDirSegments, imagePathSegments);
+        markdownLines.push(`![](${toMarkdownLinkTarget(relative)})`);
+      } catch (err) {
+        failedImages += 1;
+        const fallback = normalizeHttpUrl(src) || src;
+        markdownLines.push(`![](${toMarkdownLinkTarget(fallback)})`);
+      }
+      markdownLines.push('');
+    }
+  }
+
+  const markdown = markdownLines.join('\n').trim();
+  if (!markdown) {
+    throw createObsidianError('obsidian-local-empty-content', '当前没有可写入 Obsidian 的内容', {
+      notePath,
+      attachmentPath,
+    });
+  }
+  try {
+    await writeTextFileByPath(vaultRootHandle, notePathSegments, markdown);
+  } catch (err) {
+    throw createObsidianError('obsidian-local-note-write-failed', '写入本地笔记失败', {
+      notePath,
+      attachmentPath,
+      cause: err,
+    });
+  }
+  return {
+    notePath,
+    requestedNotePath,
+    imageCount: imageIndex,
+    failedImages,
+    attachmentPath,
+    attachmentSource: attachmentRoot.source,
+    duplicated,
+  };
+}
+
 async function buildClipboardPayload() {
   const tab = await getActiveTab();
   const host = (() => {
@@ -2002,6 +2522,108 @@ exportNotionBtn?.addEventListener('click', async () => {
   }
 });
 
+clipToObsidianBtn?.addEventListener('click', async () => {
+  const original = clipToObsidianBtn.innerHTML;
+  clipToObsidianBtn.disabled = true;
+  setIconOnlyBtn(clipToObsidianBtn, 'send', '发送中...');
+  hideObsidianToast();
+  try {
+    await refreshObsidianSettingsFromStorage();
+    ensureObsidianVaultConfigured();
+    const localVaultHandle = state.obsidianWriteMode === 'local' ? await ensureVaultWritePermissionForLocalMode() : null;
+    const blocks = collectPreviewBlocks();
+    if (!blocks.length) {
+      setStatusChip('状态：无可发送内容', 'warn');
+      setIconOnlyBtn(clipToObsidianBtn, 'circleX', '无内容');
+      return;
+    }
+    const tab = await getActiveTab();
+    const fallbackTitle = sanitizeFilename(tab?.title || '剪藏文章', '剪藏文章');
+    const noteTitle = getObsidianTitleFromBlocks(blocks, fallbackTitle);
+    const sourceUrl = normalizeHttpUrl(tab?.url || state.lastGrabUrl || '');
+    if (state.obsidianWriteMode === 'local') {
+      setStatusChip('状态：写入本地目录中', 'running');
+      try {
+        const result = await writeObsidianNoteLocal({
+          blocks,
+          noteTitle,
+          sourceUrl,
+          vaultRootHandle: localVaultHandle,
+        });
+        setIconOnlyBtn(clipToObsidianBtn, 'check', result.duplicated ? '已另存' : '已写入');
+        if (result.duplicated) {
+          setStatusChip('状态：同名已另存副本', 'warn');
+        } else if (result.failedImages > 0) {
+          setStatusChip(`状态：已写入（${result.failedImages} 图保留外链）`, 'warn');
+        } else {
+          setStatusChip(`状态：已写入 ${result.imageCount} 图`, 'ok');
+        }
+        if (statusChip) {
+          const sourceLabel = result.attachmentSource === 'obsidian' ? 'Obsidian 规则' : '扩展配置';
+          const duplicateHint = result.duplicated ? `同名冲突：${result.requestedNotePath} -> ${result.notePath}\n` : '';
+          statusChip.title = `${duplicateHint}笔记：${result.notePath}\n附件目录：${result.attachmentPath}（${sourceLabel}）\n命名：${sanitizePathSegment(noteTitle, '未命名文章')}__001`;
+        }
+        const opened = await openObsidianWrittenNote(result.notePath);
+        if (!opened) {
+          showObsidianToast({
+            tone: 'warn',
+            title: '本地已写入，自动打开失败',
+            detail: `已写入：${result.notePath}\n请确认 Obsidian 已安装并允许唤起 obsidian:// 链接。`,
+            actionLabel: '打开设置',
+            actionHandler: () => chrome.runtime.openOptionsPage(),
+          });
+        }
+      } catch (localErr) {
+        const uriResult = await sendToObsidianByUri({ blocks, noteTitle, sourceUrl });
+        const feedback = getObsidianErrorFeedback(localErr, { fallbackMode: uriResult.mode });
+        setIconOnlyBtn(clipToObsidianBtn, 'check', feedback.buttonLabel);
+        if (uriResult.mode === 'uri-fallback-paste' && feedback.statusText === '状态：本地写入失败，已回退 URI') {
+          setStatusChip('状态：本地写入失败，已回退 URI+粘贴', 'warn');
+        } else {
+          setStatusChip(feedback.statusText, feedback.tone);
+        }
+        if (statusChip) statusChip.title = feedback.title;
+        showObsidianToast({
+          tone: feedback.tone,
+          title: feedback.statusText.replace(/^状态：/, ''),
+          detail: feedback.title,
+          actionLabel: feedback.actionLabel,
+          actionHandler: feedback.actionKind === 'open-settings' ? () => chrome.runtime.openOptionsPage() : null,
+        });
+      }
+    } else {
+      const result = await sendToObsidianByUri({ blocks, noteTitle, sourceUrl });
+      if (result.mode === 'uri-fallback-paste') {
+        setIconOnlyBtn(clipToObsidianBtn, 'check', '已复制');
+        setStatusChip('状态：Obsidian 长文已复制', 'warn');
+        if (statusChip) statusChip.title = '内容超长，已创建占位笔记。请在 Obsidian 中全选后粘贴覆盖。';
+      } else {
+        setIconOnlyBtn(clipToObsidianBtn, 'check', '已发送');
+        setStatusChip('状态：已唤起 Obsidian', 'ok');
+        if (statusChip) statusChip.title = '';
+      }
+    }
+  } catch (err) {
+    console.error('Clip to obsidian failed:', err);
+    const feedback = getObsidianErrorFeedback(err);
+    setIconOnlyBtn(clipToObsidianBtn, 'circleX', feedback.buttonLabel);
+    setStatusChip(feedback.statusText, feedback.tone);
+    if (statusChip) statusChip.title = feedback.title;
+    showObsidianToast({
+      tone: feedback.tone,
+      title: feedback.statusText.replace(/^状态：/, ''),
+      detail: feedback.title,
+      actionLabel: feedback.actionLabel,
+      actionHandler: feedback.actionKind === 'open-settings' ? () => chrome.runtime.openOptionsPage() : null,
+    });
+  } finally {
+    setTimeout(() => {
+      clipToObsidianBtn.innerHTML = original;
+    }, 1800);
+    clipToObsidianBtn.disabled = false;
+  }
+});
+
 saveNotionConfigBtn?.addEventListener('click', async () => {
   try {
     await saveNotionConfig();
@@ -2227,9 +2849,14 @@ openSettingsBtn?.addEventListener('click', () => {
   chrome.runtime.openOptionsPage();
 });
 
+obsidianToastDismiss?.addEventListener('click', () => {
+  hideObsidianToast();
+});
+
 setBtn(grabBtn, 'zap', '开始净化');
 setBtn(copyBtn, 'copy', '复制 Markdown');
 setIconOnlyBtn(exportNotionBtn, 'download', '导出 Notion 包');
+setIconOnlyBtn(clipToObsidianBtn, 'send', '发送到 Obsidian');
 setIconOnlyBtn(clipToNotionBtn, 'send', '发送到 Notion');
 setIconOnlyBtn(debugMockBtn, 'flaskConical', '调试模式');
 

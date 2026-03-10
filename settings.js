@@ -1,4 +1,13 @@
 import { STORAGE_KEYS, getDefaultRules, normalizeRules, ruleHostText } from './rules.js';
+import {
+  clearVaultRootHandle,
+  detectObsidianAttachmentFolder,
+  detectObsidianNewNoteRule,
+  getVaultRootHandle,
+  queryHandlePermission,
+  requestHandlePermission,
+  saveVaultRootHandle,
+} from './obsidian-local.js';
 
 const ruleEditorSelect = document.getElementById('ruleEditorSelect');
 const ruleLabelInput = document.getElementById('ruleLabelInput');
@@ -17,6 +26,17 @@ const notionVerifyBtn = document.getElementById('notionVerifyBtn');
 const notionDiscoverPagesBtn = document.getElementById('notionDiscoverPagesBtn');
 const notionPageSelect = document.getElementById('notionPageSelect');
 const notionConfigStatus = document.getElementById('notionConfigStatus');
+const obsidianVaultInput = document.getElementById('obsidianVaultInput');
+const obsidianFolderInput = document.getElementById('obsidianFolderInput');
+const obsidianWriteModeSelect = document.getElementById('obsidianWriteModeSelect');
+const obsidianAttachmentFolderInput = document.getElementById('obsidianAttachmentFolderInput');
+const pickObsidianVaultDirBtn = document.getElementById('pickObsidianVaultDirBtn');
+const clearObsidianVaultDirBtn = document.getElementById('clearObsidianVaultDirBtn');
+const saveObsidianConfigBtn = document.getElementById('saveObsidianConfigBtn');
+const obsidianConfigStatus = document.getElementById('obsidianConfigStatus');
+const obsidianVaultDirStatus = document.getElementById('obsidianVaultDirStatus');
+const obsidianAttachmentRuleStatus = document.getElementById('obsidianAttachmentRuleStatus');
+const obsidianReadinessStatus = document.getElementById('obsidianReadinessStatus');
 
 const NOTION_API_BASE = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2025-09-03';
@@ -24,6 +44,13 @@ const NOTION_VERSION = '2025-09-03';
 const state = {
   rules: getDefaultRules(),
   debugMode: true,
+  obsidianVault: '',
+  obsidianFolder: '',
+  obsidianWriteMode: 'uri',
+  obsidianAttachmentFolder: 'images',
+  detectedObsidianAttachmentFolder: '',
+  detectedObsidianNewNoteRule: { location: '', folder: '' },
+  vaultRootHandle: null,
   notionToken: '',
   notionParentPageId: '',
   notionWriteTargetType: 'page',
@@ -52,6 +79,37 @@ function setNotionConfigStatus(message, tone = '') {
 
 function setDebugStatus(message, tone = '') {
   setInlineStatus(debugStatus, message, tone);
+}
+
+function setObsidianConfigStatus(message, tone = '') {
+  setInlineStatus(obsidianConfigStatus, message, tone);
+}
+
+function setObsidianVaultDirStatus(message, tone = '') {
+  setInlineStatus(obsidianVaultDirStatus, message, tone);
+}
+
+function setObsidianAttachmentRuleStatus(message, tone = '') {
+  setInlineStatus(obsidianAttachmentRuleStatus, message, tone);
+}
+
+function setObsidianReadinessStatus(message, tone = '') {
+  setInlineStatus(obsidianReadinessStatus, message, tone);
+}
+
+function refreshObsidianReadinessStatus() {
+  const vaultReady = Boolean(state.obsidianVault);
+  const localHandleReady = Boolean(state.vaultRootHandle);
+  const newNoteRuleActive = state.detectedObsidianNewNoteRule?.location === 'folder' && state.detectedObsidianNewNoteRule?.folder;
+  const modeLabel = state.obsidianWriteMode === 'local' ? '本地直写' : 'URI 直连';
+  const lines = [
+    `Vault 名称：${vaultReady ? `已配置（${state.obsidianVault}）` : '未配置（必填）'}`,
+    `目录授权：${localHandleReady ? '已绑定本地库目录' : '未绑定本地库目录'}`,
+    `新建笔记规则：${newNoteRuleActive ? state.detectedObsidianNewNoteRule.folder : '未检测到指定目录规则（将使用扩展目录或库根）'}`,
+    `URI 唤起：${vaultReady ? '可用' : '不可用（缺少 Vault）'}`,
+    `当前模式：${modeLabel}`,
+  ];
+  setObsidianReadinessStatus(lines.join('\n'), vaultReady ? 'ok' : 'warn');
 }
 
 function normalizeRuleId(raw) {
@@ -405,6 +463,10 @@ async function loadSettings() {
   const stored = await chrome.storage.local.get([
     STORAGE_KEYS.siteRules,
     STORAGE_KEYS.debugMode,
+    STORAGE_KEYS.obsidianVault,
+    STORAGE_KEYS.obsidianFolder,
+    STORAGE_KEYS.obsidianWriteMode,
+    STORAGE_KEYS.obsidianAttachmentFolder,
     STORAGE_KEYS.notionToken,
     STORAGE_KEYS.notionParentPageId,
     STORAGE_KEYS.notionWriteTargetType,
@@ -417,6 +479,13 @@ async function loadSettings() {
 
   state.rules = normalizeRules(stored[STORAGE_KEYS.siteRules]);
   state.debugMode = stored[STORAGE_KEYS.debugMode] !== false;
+  state.obsidianVault = typeof stored[STORAGE_KEYS.obsidianVault] === 'string' ? stored[STORAGE_KEYS.obsidianVault].trim() : '';
+  state.obsidianFolder = typeof stored[STORAGE_KEYS.obsidianFolder] === 'string' ? stored[STORAGE_KEYS.obsidianFolder].trim() : '';
+  state.obsidianWriteMode = stored[STORAGE_KEYS.obsidianWriteMode] === 'local' ? 'local' : 'uri';
+  state.obsidianAttachmentFolder =
+    typeof stored[STORAGE_KEYS.obsidianAttachmentFolder] === 'string' && stored[STORAGE_KEYS.obsidianAttachmentFolder].trim()
+      ? stored[STORAGE_KEYS.obsidianAttachmentFolder].trim()
+      : 'images';
   state.notionToken = typeof stored[STORAGE_KEYS.notionToken] === 'string' ? stored[STORAGE_KEYS.notionToken].trim() : '';
   state.notionParentPageId = typeof stored[STORAGE_KEYS.notionParentPageId] === 'string' ? stored[STORAGE_KEYS.notionParentPageId].trim() : '';
   state.notionWriteTargetType = stored[STORAGE_KEYS.notionWriteTargetType] === 'database' ? 'database' : 'page';
@@ -449,6 +518,10 @@ async function loadSettings() {
   state.activeRuleId = state.rules[0]?.id || '';
 
   if (debugModeCheckbox) debugModeCheckbox.checked = state.debugMode;
+  if (obsidianVaultInput) obsidianVaultInput.value = state.obsidianVault;
+  if (obsidianFolderInput) obsidianFolderInput.value = state.obsidianFolder;
+  if (obsidianWriteModeSelect) obsidianWriteModeSelect.value = state.obsidianWriteMode;
+  if (obsidianAttachmentFolderInput) obsidianAttachmentFolderInput.value = state.obsidianAttachmentFolder;
   if (notionTokenInput) notionTokenInput.value = state.notionToken;
   if (notionParentPageInput) notionParentPageInput.value = state.notionParentPageId;
   if (notionTargetTypeSelect) notionTargetTypeSelect.value = state.notionWriteTargetType;
@@ -458,6 +531,74 @@ async function loadSettings() {
   setDebugStatus(state.debugMode ? '调试模式已启用' : '调试模式已关闭', 'ok');
   setRuleEditorStatus('设置已加载', 'ok');
   setNotionConfigStatus('');
+  updateWriteModeHint();
+  await refreshVaultBindingStatus();
+  refreshObsidianReadinessStatus();
+}
+
+async function saveObsidianConfig() {
+  const obsidianVault = state.obsidianVault || '';
+  const obsidianFolder = obsidianFolderInput?.value?.trim() || '';
+  const obsidianWriteMode = obsidianWriteModeSelect?.value === 'local' ? 'local' : 'uri';
+  const obsidianAttachmentFolder = obsidianAttachmentFolderInput?.value?.trim() || 'images';
+  if (!obsidianVault) throw new Error('请先点击“选择本地库目录”完成 Vault 同步');
+  state.obsidianVault = obsidianVault;
+  state.obsidianFolder = obsidianFolder;
+  state.obsidianWriteMode = obsidianWriteMode;
+  state.obsidianAttachmentFolder = obsidianAttachmentFolder;
+  await chrome.storage.local.set({
+    [STORAGE_KEYS.obsidianVault]: obsidianVault,
+    [STORAGE_KEYS.obsidianFolder]: obsidianFolder,
+    [STORAGE_KEYS.obsidianWriteMode]: obsidianWriteMode,
+    [STORAGE_KEYS.obsidianAttachmentFolder]: obsidianAttachmentFolder,
+  });
+}
+
+function updateWriteModeHint() {
+  if (state.obsidianWriteMode === 'local') {
+    setObsidianConfigStatus('已启用本地直写模式：发送时将直接写入本地库目录。', 'ok');
+  } else {
+    setObsidianConfigStatus('当前为 URI 直连模式：通过 obsidian://new 创建笔记。', 'warn');
+  }
+}
+
+async function syncVaultFromHandle(handle) {
+  const vaultName = typeof handle?.name === 'string' ? handle.name.trim() : '';
+  if (!vaultName) return false;
+  state.obsidianVault = vaultName;
+  if (obsidianVaultInput) obsidianVaultInput.value = vaultName;
+  await chrome.storage.local.set({ [STORAGE_KEYS.obsidianVault]: vaultName });
+  return true;
+}
+
+async function refreshVaultBindingStatus() {
+  state.vaultRootHandle = await getVaultRootHandle();
+  state.detectedObsidianNewNoteRule = { location: '', folder: '' };
+  if (!state.vaultRootHandle) {
+    state.obsidianVault = '';
+    setObsidianVaultDirStatus('未绑定本地库目录。', 'warn');
+    state.detectedObsidianAttachmentFolder = '';
+    setObsidianAttachmentRuleStatus('未检测到 Obsidian 附件规则，将使用扩展配置。', 'warn');
+    if (obsidianVaultInput) obsidianVaultInput.value = '';
+    await chrome.storage.local.set({ [STORAGE_KEYS.obsidianVault]: '' });
+    refreshObsidianReadinessStatus();
+    return;
+  }
+  await syncVaultFromHandle(state.vaultRootHandle);
+  const permission = await queryHandlePermission(state.vaultRootHandle, 'readwrite');
+  if (permission === 'granted') {
+    setObsidianVaultDirStatus(`已绑定目录：${state.vaultRootHandle.name || '已授权目录'}（Vault 已同步）`, 'ok');
+  } else {
+    setObsidianVaultDirStatus('目录授权已失效，请重新授权。', 'warn');
+  }
+  state.detectedObsidianAttachmentFolder = await detectObsidianAttachmentFolder(state.vaultRootHandle);
+  state.detectedObsidianNewNoteRule = await detectObsidianNewNoteRule(state.vaultRootHandle);
+  if (state.detectedObsidianAttachmentFolder) {
+    setObsidianAttachmentRuleStatus(`检测到 Obsidian 附件目录规则：${state.detectedObsidianAttachmentFolder}（发送时优先使用）`, 'ok');
+  } else {
+    setObsidianAttachmentRuleStatus('未检测到 Obsidian 附件目录规则，将使用扩展配置。', 'warn');
+  }
+  refreshObsidianReadinessStatus();
 }
 
 ruleEditorSelect?.addEventListener('change', () => {
@@ -625,6 +766,62 @@ notionTargetTypeSelect?.addEventListener('change', () => {
     console.warn('Persist notion target type failed:', err);
   });
   setNotionConfigStatus(targetType === 'database' ? '已切换到数据库模式' : '已切换到页面模式', 'ok');
+});
+
+saveObsidianConfigBtn?.addEventListener('click', async () => {
+  try {
+    if (!state.vaultRootHandle) throw new Error('请先点击“选择本地库目录”');
+    await saveObsidianConfig();
+    updateWriteModeHint();
+    refreshObsidianReadinessStatus();
+  } catch (err) {
+    setObsidianConfigStatus(`保存失败：${err?.message || '未知错误'}`, 'error');
+    refreshObsidianReadinessStatus();
+  }
+});
+
+obsidianWriteModeSelect?.addEventListener('change', () => {
+  state.obsidianWriteMode = obsidianWriteModeSelect.value === 'local' ? 'local' : 'uri';
+  updateWriteModeHint();
+  refreshObsidianReadinessStatus();
+});
+
+pickObsidianVaultDirBtn?.addEventListener('click', async () => {
+  if (typeof window.showDirectoryPicker !== 'function') {
+    setObsidianVaultDirStatus('当前浏览器不支持目录选择器。', 'error');
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    const permission = await requestHandlePermission(handle, 'readwrite');
+    if (permission !== 'granted') {
+      setObsidianVaultDirStatus('未获得目录写入权限。', 'error');
+      return;
+    }
+    await saveVaultRootHandle(handle);
+    await syncVaultFromHandle(handle);
+    await refreshVaultBindingStatus();
+    refreshObsidianReadinessStatus();
+    setObsidianConfigStatus('Vault 已从本地库目录自动同步，可继续保存其他配置。', 'ok');
+  } catch (err) {
+    if (err?.name === 'AbortError') return;
+    setObsidianVaultDirStatus(`绑定目录失败：${err?.message || '未知错误'}`, 'error');
+  }
+});
+
+clearObsidianVaultDirBtn?.addEventListener('click', async () => {
+  try {
+    await clearVaultRootHandle();
+    state.vaultRootHandle = null;
+    state.obsidianVault = '';
+    if (obsidianVaultInput) obsidianVaultInput.value = '';
+    await chrome.storage.local.set({ [STORAGE_KEYS.obsidianVault]: '' });
+    await refreshVaultBindingStatus();
+    setObsidianVaultDirStatus('已清除目录授权。', 'ok');
+    refreshObsidianReadinessStatus();
+  } catch (err) {
+    setObsidianVaultDirStatus(`清除失败：${err?.message || '未知错误'}`, 'error');
+  }
 });
 
 loadSettings().catch(err => {

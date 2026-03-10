@@ -3,7 +3,10 @@
 ## High Priority
 高优先级。
 
+- [x] 完成 Obsidian 第二阶段（本地目录直写 + 图片本地化 + Markdown 相对路径附件）
 - [ ] 完善 Notion 直连剪藏稳定性（图片上传重试、失败统计、token 安全存储）
+- [x] 优化 Obsidian 本地直写失败反馈（错误分级 + 可执行指引 + 关键路径提示）
+- [x] 设计并落地 Obsidian 重复导入冲突策略（禁止覆盖同名文件，自动后缀另存）
 - [x] 插件重启后保留已选 Notion 可写目标（页面/数据库，免重复选择）
 - [x] 为 `extractor.js` 增加可重复执行的测试样例（至少覆盖小报童、公众号、通用回退）
 - [x] 抽取 `extractor.js` 与 `rules.js` 的重复规则定义，避免双份维护
@@ -12,6 +15,8 @@
 中优先级。
 
 - [ ] 在 `sidepanel.js` 增加规则 JSON 校验错误定位（指出具体字段）
+- [x] 为 Obsidian 本地直写补齐配置与容错（目录句柄持久化、权限失效恢复、重名策略）
+- [ ] 增加 Obsidian 本地直写专项回归（附件规则识别、标题目录、序号命名、权限失效提示）
 - [ ] 增加更多站点规则模板与规则导入示例
 - [ ] 优化“导出 Notion 包”交互（导出进度、失败图片提示、文件命名策略）
 - [ ] 在设置页优化 Notion 配置表单（默认走自动发现+下拉，`Parent Page ID / URL` 收起到高级入口）
@@ -67,3 +72,14 @@
 - [x] Footer 按钮层级优化：3 个次级圆形图标按钮 + 发送到 Notion 主文案按钮
 - [x] 少数派规则收敛：正文 root 优先定位 `.article_main__content.wangEditor-txt`
 - [x] 侧栏聚焦抓取主流程：设置能力迁移到独立 Options Page（新增 `settings.html/settings.js`）
+- [x] 新增 Obsidian URI 单篇导入（Vault/Folder 配置 + 长文超限自动降级为剪贴板粘贴）
+- [x] Obsidian 导入 frontmatter 精简：仅保留 `source` 字段
+- [x] Obsidian 本地直写新增“优先用户附件规则，回退扩展配置”策略
+- [x] Obsidian 本地图片命名调整为 `<笔记名>__<序号>`（统一附件目录，冲突自动避让）
+- [x] Obsidian 本地直写容错：图片失败保留外链，整篇失败回退 URI
+- [x] Obsidian 本地直写权限策略调整：失效时回设置页重授权，避免侧栏静默失败
+- [x] Obsidian 失败反馈分级：按错误类型给出下一步动作、关键路径与回退说明
+- [x] Obsidian 配置收敛：Vault 改为必填，并在设置页展示依赖/授权状态
+- [x] Obsidian 打开体验优化：本地直写成功后自动唤起并打开对应笔记
+- [x] Obsidian 配置简化：Vault 与“本地库目录”绑定为单入口自动同步（不再手填）
+- [x] Obsidian 同名写入保护：禁止覆盖任何同名文件，自动追加后缀另存

@@ -1,6 +1,10 @@
 export const STORAGE_KEYS = {
   siteRules: 'siteRules',
   debugMode: 'debugMode',
+  obsidianVault: 'obsidianVault',
+  obsidianFolder: 'obsidianFolder',
+  obsidianWriteMode: 'obsidianWriteMode',
+  obsidianAttachmentFolder: 'obsidianAttachmentFolder',
   notionToken: 'notionToken',
   notionParentPageId: 'notionParentPageId',
   notionWriteTargetType: 'notionWriteTargetType',

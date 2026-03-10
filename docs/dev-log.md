@@ -846,3 +846,259 @@ Notes:
   - `docs/dev-log.md`
 - Notes:
   - 预期收益：新增或调整默认站点规则时，只需修改 `rules.js` 一处。
+
+### 2026-03-09 20:47 (CST)
+- Author: Codex
+- Summary: 安装 Node/npm，整理当前改动并切出 Obsidian 方案分支。
+- Changes:
+  - 通过用户目录安装 `node v25.8.0` / `npm 11.11.0`，并写入 `~/.zprofile`
+  - 执行 `npm run test:regression`，4/4 case 通过
+  - 清理并停止跟踪 `.DS_Store`
+  - 提交当前设置页迁移与默认规则去重改动：`c981099 feat: move settings to options page and dedupe default rules`
+  - 新建分支 `codex/obsidian-send`
+  - 与用户确认 Obsidian 集成约束：要求一键写入、图片本地化、标题作为文件名；同时明确浏览器插件单独无法实现“安装即用”的本地写入体验
+  - 更新 `docs/ai-context.md`、`docs/todo.md`、`docs/dev-log.md`，将 Obsidian 方案评估列入下一会话优先项
+- Files Modified:
+  - `docs/ai-context.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 下一会话应先拍板 Obsidian 的最终集成形态：浏览器扩展 + Obsidian 插件，或浏览器扩展 + 本地桥接服务。
+
+### 2026-03-09 22:10 (CST)
+- Author: Codex
+- Summary: 落地 Obsidian 第一阶段单篇导入（URI 方案），并将配置迁移到独立设置页。
+- Changes:
+  - 更新 `rules.js`：新增 Obsidian 存储键（`obsidianVault`、`obsidianFolder`）
+  - 更新 `settings.html` / `settings.js`：新增 Obsidian 配置区（Vault、Folder）与保存逻辑
+  - 更新 `sidepanel.html`：结果态 Footer 新增“发送到 Obsidian”图标按钮，并调整为 `4` 个次级图标按钮 + `1` 个 Notion 主按钮
+  - 更新 `sidepanel.js`：新增 Obsidian 导入链路
+    - 将当前预览块构建为 Markdown
+    - 通过 `obsidian://new` 创建/覆盖目标笔记
+    - URI 超长时自动降级为“复制全文 + 创建占位笔记”
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `rules.js`
+  - `settings.html`
+  - `settings.js`
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已执行 `node --check sidepanel.js`、`node --check settings.js` 与 `npm run test:regression`，均通过。
+  - 当前仍是 Obsidian URI 方案；本地目录直写与图片本地化为下一阶段。
+
+### 2026-03-09 22:28 (CST)
+- Author: Codex
+- Summary: 按用户需求调整 Obsidian 导入内容结构（仅保留来源属性并修复标题重复）。
+- Changes:
+  - 更新 `sidepanel.js`：Obsidian Markdown frontmatter 改为仅写 `source`（移除 `published`）
+  - 更新 `sidepanel.js`：Obsidian 导入时跳过与笔记标题同名的首个 `h1`，避免正文重复标题
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已执行 `node --check sidepanel.js` 与 `npm run test:regression`，均通过。
+
+### 2026-03-09 23:05 (CST)
+- Author: Codex
+- Summary: 实现 Obsidian 本地直写模式，支持优先读取用户附件规则与“标题/序号”图片命名。
+- Changes:
+  - 新增 `obsidian-local.js`：封装本地目录句柄持久化（IndexedDB）、权限检测、文件写入、相对路径计算、附件规则读取
+  - 更新 `rules.js`：新增 Obsidian 本地直写配置键（`obsidianWriteMode`、`obsidianAttachmentFolder`）
+  - 更新 `settings.html` / `settings.js`：
+    - 新增 Obsidian 写入模式（URI / 本地直写）
+    - 新增附件目录兜底配置
+    - 新增“选择本地库目录/清除授权”
+    - 新增附件规则检测状态展示（优先使用 Obsidian 规则）
+  - 更新 `sidepanel.js`：
+    - 发送到 Obsidian 时按模式分流（URI 或本地直写）
+    - 本地直写优先读取 `.obsidian/app.json` 的 `attachmentFolderPath`
+    - 图片路径与命名改为 `<附件目录>/<标题>/<序号>.<ext>`
+    - Markdown 图片链接按笔记目录计算相对路径
+- Files Modified:
+  - `obsidian-local.js`
+  - `rules.js`
+  - `settings.html`
+  - `settings.js`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已执行 `node --check settings.js`、`node --check sidepanel.js`、`node --check obsidian-local.js` 与 `npm run test:regression`，均通过。
+
+### 2026-03-09 23:22 (CST)
+- Author: Codex
+- Summary: 修复 Obsidian 本地直写失败时的可用性问题，增强失败容错与回退策略。
+- Changes:
+  - 更新 `sidepanel.js`：本地直写时单张图片写入失败不再中断，改为保留远程外链
+  - 更新 `sidepanel.js`：本地直写整体失败时自动回退 URI 发送，避免直接失败
+  - 更新 `sidepanel.js`：状态提示补充回退原因与生效路径信息
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已执行 `node --check sidepanel.js` 与 `npm run test:regression`，均通过。
+
+### 2026-03-09 23:36 (CST)
+- Author: Codex
+- Summary: 修正本地直写权限检查时机，避免侧栏发送阶段频繁回退 URI。
+- Changes:
+  - 更新 `sidepanel.js`：本地直写改为仅检查“已授权目录句柄”，不在发送阶段二次请求目录权限
+  - 更新 `sidepanel.js`：若权限失效，明确提示回设置页重新选择目录授权
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已执行 `node --check sidepanel.js` 与 `npm run test:regression`，均通过。
+
+### 2026-03-09 23:52 (CST)
+- Author: Codex
+- Summary: 修复本地直写图片链接解析问题，并记录本轮用户反馈待办后执行会话收尾。
+- Changes:
+  - 更新 `sidepanel.js`：本地直写图片链接改为 `![](<path>)`，避免路径含空格/中文时 Obsidian 解析截断
+  - 更新 `docs/todo.md`：新增两项高优任务
+    - Obsidian 本地直写失败反馈优化（可定位、可执行）
+    - 重复导入冲突策略（避免误覆盖人工笔记）
+  - 更新 `docs/ai-context.md`：同步当前重点与下一会话建议（反馈优化 + 冲突策略优先）
+- Files Modified:
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 用户验证“本地写入与图片命名已生效”；当前剩余问题已登记为下一会话优先项。
+
+### 2026-03-10 (Asia/Shanghai)
+- Author: Codex
+- Summary: 优化 Obsidian 本地直写失败反馈，按错误类型给出可执行修复路径。
+- Changes:
+  - 更新 `sidepanel.js`：为 Obsidian 发送链路增加统一错误编码与分级反馈映射
+  - 更新 `sidepanel.js`：未绑定目录、授权失效、URI 无法唤起、长文降级失败、本地落盘失败等场景改为输出具体下一步动作
+  - 更新 `sidepanel.js`：本地落盘失败时在提示中附带笔记目标路径与附件目录，回退 URI 成功时保留明确原因说明
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已执行 `node --check sidepanel.js` 与 `npm run test:regression`，均通过。
+
+### 2026-03-10 (Asia/Shanghai)
+- Author: Codex
+- Summary: 收敛 Obsidian 配置约束并增强发送闭环（Vault 必填 + 本地写入后自动打开）。
+- Changes:
+  - 更新 `sidepanel.html`：新增 Obsidian 发送错误 toast（详情 + 一键打开设置）
+  - 更新 `sidepanel.js`：
+    - `obsidian://` 唤起改为优先 `chrome.tabs.create`，提升唤起稳定性
+    - 增加 Vault 必填校验，缺失时阻断发送并给出可执行提示
+    - URI 模式目录留空时改用 `name` 参数，遵循 Obsidian 默认新建笔记位置
+    - 本地直写目录留空时读取 `.obsidian/app.json` 的新建笔记规则
+    - 本地直写成功后调用 `obsidian://open` 自动打开刚写入笔记
+  - 更新 `obsidian-local.js`：新增 Obsidian 新建笔记规则读取能力（`newFileLocation/newFileFolderPath`）
+  - 更新 `settings.html` / `settings.js`：
+    - Vault 标签改为必填
+    - 新增 Obsidian 依赖状态面板（Vault、目录授权、规则检测、URI 可用性）
+    - 保存 Obsidian 配置时加入 Vault 必填校验
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `sidepanel.html`
+  - `sidepanel.js`
+  - `obsidian-local.js`
+  - `settings.html`
+  - `settings.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已执行 `node --check sidepanel.js`、`node --check settings.js`、`node --check obsidian-local.js` 与 `npm run test:regression`，均通过。
+
+### 2026-03-10 (Asia/Shanghai)
+- Author: Codex
+- Summary: 按用户反馈简化 Obsidian 配置入口，Vault 改为目录选择自动同步。
+- Changes:
+  - 更新 `settings.html`：Vault 输入改为只读显示，提示通过“选择本地库目录”自动同步
+  - 更新 `settings.js`：
+    - 保存 Obsidian 配置时不再允许手填 Vault，必须先完成目录选择
+    - 选择目录后自动同步 `obsidianVault`，清除授权时同步清空
+    - 新增并完善 Obsidian 依赖状态面板刷新（Vault/授权/规则/URI）
+  - 更新 `sidepanel.js`：Vault 缺失错误文案改为引导“先选择本地库目录”
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`
+- Files Modified:
+  - `settings.html`
+  - `settings.js`
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已执行 `node --check settings.js`、`node --check sidepanel.js` 与 `npm run test:regression`，均通过。
+
+### 2026-03-10 (Asia/Shanghai)
+- Author: Codex
+- Summary: 实现 Obsidian 同名笔记保护策略，禁止覆盖并自动后缀另存。
+- Changes:
+  - 更新 `obsidian-local.js`：新增唯一文件名解析工具 `resolveUniqueFilePath`，同名自动生成 ` (2)/(3)...` 后缀
+  - 更新 `sidepanel.js`：本地直写前先解析唯一目标路径，不再覆盖任何同名 `.md`
+  - 更新 `sidepanel.js`：同名另存时同步调整图片目录命名，避免覆盖历史附件
+  - 更新 `sidepanel.js`：状态反馈新增“同名已另存副本”，并展示原目标与最终目标路径
+  - 同步更新 `docs/todo.md` 与 `docs/dev-log.md`
+- Files Modified:
+  - `obsidian-local.js`
+  - `sidepanel.js`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已执行 `node --check sidepanel.js`、`node --check obsidian-local.js` 与 `npm run test:regression`，均通过。
+
+### 2026-03-10 (Asia/Shanghai)
+- Author: Codex
+- Summary: 按用户要求切换附件策略为“统一目录 + 唯一文件名”，消除同名文件夹残留问题。
+- Changes:
+  - 更新 `sidepanel.js`：附件从“同名子目录”改为“附件根目录统一存放”
+  - 更新 `sidepanel.js`：附件命名改为 `<笔记名>__<序号>.<ext>`，并在冲突时自动后缀避让
+  - 更新 `sidepanel.js`：同名笔记另存时状态提示展示原目标与最终路径
+  - 同步更新 `docs/ai-context.md`、`docs/architecture.md`、`docs/todo.md`、`docs/dev-log.md`
+- Files Modified:
+  - `sidepanel.js`
+  - `docs/ai-context.md`
+  - `docs/architecture.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 已执行 `node --check sidepanel.js` 与 `npm run test:regression`，均通过。
+
+### 2026-03-10 (Asia/Shanghai)
+- Author: Codex
+- Summary: 执行会话收尾，同步当前阶段目标并准备提交推送。
+- Changes:
+  - 更新 `docs/ai-context.md`：移除已完成的“重复导入冲突策略”下一步，改为回归验证与稳定性项
+  - 更新 `docs/todo.md`：将附件命名完成项更新为当前实现 `笔记名__序号` 规则
+  - 复核本轮代码变更范围并准备 Git 提交
+- Files Modified:
+  - `docs/ai-context.md`
+  - `docs/todo.md`
+  - `docs/dev-log.md`
+- Notes:
+  - 当前终端环境缺少 `node/npm` 命令，无法在本地复跑语法检查与回归测试。

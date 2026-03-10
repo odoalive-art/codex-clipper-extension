@@ -215,6 +215,39 @@
       <div id="notionConfigStatus" class="inline-status"></div>
       <div class="hint">请先在 Notion 把目标页面分享给你的 Integration（Add connections）。</div>
     </section>
+
+    <section class="card">
+      <h2>Obsidian 导入</h2>
+      <div class="row">
+        <label for="obsidianWriteModeSelect">写入模式</label>
+        <select id="obsidianWriteModeSelect">
+          <option value="uri">URI 直连（兼容模式）</option>
+          <option value="local">本地直写（推荐）</option>
+        </select>
+      </div>
+      <div class="row">
+        <label for="obsidianVaultInput">Vault（由本地库目录自动同步）</label>
+        <input id="obsidianVaultInput" type="text" placeholder="请先点击“选择本地库目录”" readonly>
+      </div>
+      <div class="row">
+        <label for="obsidianFolderInput">笔记目录（可选）</label>
+        <input id="obsidianFolderInput" type="text" placeholder="留空则遵循 Obsidian 默认新建笔记位置">
+      </div>
+      <div class="row">
+        <label for="obsidianAttachmentFolderInput">附件目录（仅本地直写模式）</label>
+        <input id="obsidianAttachmentFolderInput" type="text" placeholder="默认 images；若检测到 Obsidian 规则将自动优先使用">
+      </div>
+      <div class="actions">
+        <button id="pickObsidianVaultDirBtn" class="btn">选择本地库目录</button>
+        <button id="clearObsidianVaultDirBtn" class="btn">清除目录授权</button>
+        <button id="saveObsidianConfigBtn" class="btn primary">保存 Obsidian 配置</button>
+      </div>
+      <div id="obsidianVaultDirStatus" class="inline-status"></div>
+      <div id="obsidianAttachmentRuleStatus" class="inline-status"></div>
+      <div id="obsidianReadinessStatus" class="inline-status"></div>
+      <div id="obsidianConfigStatus" class="inline-status"></div>
+      <div class="hint">Vault 名称由“选择本地库目录”自动同步，避免库名与目录不一致。URI 模式留空目录时会遵循 Obsidian 默认新建笔记位置；本地直写模式会优先读取 Vault 的新建笔记/附件规则，再回退扩展配置。</div>
+    </section>
   </div>
   <script type="module" src="settings.js"></script>
 </body>

@@ -6,7 +6,7 @@
 - `sidepanel.html`：Side Panel 页面
 - `sidepanel.js`：Side Panel 脚本主控层
 - `settings.html`：扩展设置页（Options Page）UI
-- `settings.js`：设置页脚本（规则管理/调试开关/Notion 配置）
+- `settings.js`：设置页脚本（规则管理/调试开关/Notion/Obsidian 配置）
 - `icons.js`：本地 Lucide 风格 SVG 图标资源
 - `background.js`：扩展后台脚本（配置点击图标打开 Side Panel）
 - `rules.js`：规则定义与归一化模块
@@ -20,11 +20,26 @@
 ## Modules
 
 - Side Panel Controller (`sidepanel.js`)
-  - 管理抓取按钮、复制按钮、导出按钮与发送 Notion 按钮
+  - 管理抓取按钮、复制按钮、导出按钮与发送 Notion/Obsidian 按钮
   - 作为“内容抓取工作台”负责抓取、预览、复制、导出与发送主链路
   - 提供“设置”入口并跳转独立设置页（`chrome.runtime.openOptionsPage`）
   - 文本块支持 `blockquote` 语义输出，预览/复制/Notion 写入保持引用结构
   - 管理导出按钮，生成 Notion 导入包（zip）
+  - 支持 Obsidian URI 导入：构建 Markdown 后通过 `obsidian://new` 创建/覆盖笔记
+  - Obsidian `Vault` 由设置页“选择本地库目录”自动同步；发送前先校验，缺失时直接提示并引导打开设置页
+  - Obsidian Markdown frontmatter 仅写入 `source` 字段（按需求移除 `published`）
+  - URI 模式在未设置目录时使用 `name` 参数，遵循 Obsidian 默认新建笔记位置
+  - Obsidian 长文自动降级：复制全文到剪贴板 + 创建占位笔记提示手动粘贴
+  - 支持 Obsidian 本地直写：直接写入 `Vault` 目录中的 markdown 与图片文件
+  - 本地直写成功后会尝试通过 `obsidian://open` 自动打开对应笔记
+  - 本地直写时图片命名为 `<笔记名>__<序号>`，统一存放于附件根目录并按相对路径回写 markdown 图片链接
+  - 本地直写同名笔记永不覆盖，自动追加后缀另存（`(2)/(3)`）
+  - 本地直写在未设置扩展目录时会优先读取 Obsidian 新建笔记目录规则（`newFileLocation/newFileFolderPath`）
+  - 本地直写时优先读取 Obsidian `.obsidian/app.json` 的 `attachmentFolderPath`
+  - 本地直写容错：图片落盘失败回退外链；整篇落盘失败自动回退 URI 发送
+  - 本地直写权限获取由设置页完成（侧栏仅检查权限状态，失效时提示回设置页重授权）
+  - Obsidian 失败反馈按错误类型分级，给出下一步动作、笔记目标路径与附件目录等定位信息
+  - 侧栏内置 Obsidian 错误 toast，可直接跳转设置页处理配置/授权问题
   - 读取 Notion 直连配置（Token、写入目标 ID、目标类型）并执行写入
   - 调用 Notion API 创建页面/数据库记录、上传图片并写入 block
   - 媒体写入支持降级：视频 URL 写入 `embed`，图片上传失败回退为 `image.external`
@@ -50,6 +65,10 @@
 - Settings Controller (`settings.js`)
   - 承接站点标签管理（规则选择、编辑、新增、删除）
   - 管理调试开关（`debugMode`）并持久化到 `chrome.storage.local`
+  - 管理 Obsidian 配置（Vault 自动同步、Folder 可选）并持久化到 `chrome.storage.local`
+  - 管理 Obsidian 写入模式（URI/本地直写）与附件目录兜底配置
+  - 支持绑定本地 Vault 目录并检测 Obsidian 附件目录规则
+  - 可视化展示 Obsidian 依赖状态（Vault、目录授权、规则检测、URI 可用性）
   - 管理 Notion 配置（Token、目标类型、目标 ID）与保存动作
   - 支持 Notion 连接验证与可写目标自动发现（页面/数据库）
   - 支持按目标类型过滤下拉候选，并持久化最近选择与候选缓存
@@ -85,7 +104,9 @@
 4. `sidepanel.js` 将 blocks 渲染为预览 DOM
 5. 用户可选择复制内容，或逐图复制图片二进制
 6. 用户可导出 `article.md + images/*` 的 zip 包并在 Notion 中 Import
-7. 用户可直接发送到 Notion：按目标类型创建子页面或数据库记录，再写入文本块与 `image.file_upload` 块
+7. 用户可发送到 Obsidian（URI 模式）：通过 `obsidian://new` 创建/覆盖笔记；超长内容降级为“占位笔记 + 剪贴板粘贴”
+8. 用户可发送到 Obsidian（本地直写模式）：直接写入本地 Vault 的 markdown 与附件图片
+9. 用户可直接发送到 Notion：按目标类型创建子页面或数据库记录，再写入文本块与 `image.file_upload` 块
 
 ## External Dependencies
 
@@ -98,4 +119,7 @@
   - `http://*/*`
   - `https://*/*`
 - 无第三方 npm 依赖（当前为原生 JS 模块实现）
+- Obsidian URI（`obsidian://new`）
+- Browser File System Access API（`showDirectoryPicker` / File System Handles）
+- IndexedDB（持久化本地 Vault 目录句柄）
 - Notion API（`/search`、`/pages`、`/databases/{id}`、`/data_sources/{id}`、`/blocks/{id}/children`、`/file_uploads`）
